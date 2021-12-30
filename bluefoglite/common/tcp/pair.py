@@ -54,18 +54,14 @@ def _json_encode(obj: Any, encoding: str) -> bytes:
 
 
 def _json_decode(json_bytes: bytes, encoding: str) -> Dict:
-    tiow = io.TextIOWrapper(
-        io.BytesIO(json_bytes), encoding=encoding, newline=""
-    )
+    tiow = io.TextIOWrapper(io.BytesIO(json_bytes), encoding=encoding, newline="")
     obj = json.load(tiow)
     tiow.close()
     return obj
 
 
 # Fix length-header
-Header = collections.namedtuple(
-    'Header', ['tag', 'content_length']
-)
+Header = collections.namedtuple("Header", ["tag", "content_length"])
 # >iI means big-endian Int (4) + unsigned Int (4)
 HEADER_FORMAT = ">iI"
 HEADER_LENGTH = 8  # must make sure it align with header format
@@ -74,9 +70,10 @@ HEADER_LENGTH = 8  # must make sure it align with header format
 def _create_header(nbytes: int, tag: int = 0) -> bytes:
     """create a message with http style header."""
     assert nbytes > 0
-    if nbytes >= 2**32:
-        raise ValueError("Don't support to send message length in bytes "
-                         f"larger than {2**32}")
+    if nbytes >= 2 ** 32:
+        raise ValueError(
+            "Don't support to send message length in bytes " f"larger than {2**32}"
+        )
     header = Header(tag=tag, content_length=nbytes)
     header_bytes = struct.pack(HEADER_FORMAT, *header)
     return header_bytes
@@ -112,9 +109,13 @@ class Envelope:
 
 
 class Pair(Handler):
-
-    def __init__(self, event_loop: EventLoop, self_rank: int, peer_rank: int,
-                 address: SocketAddress):
+    def __init__(
+        self,
+        event_loop: EventLoop,
+        self_rank: int,
+        peer_rank: int,
+        address: SocketAddress,
+    ):
         self._event_loop = event_loop
         self._state = PairState.INITIALIZING
         self._peer_addr: Optional[SocketAddress] = None
@@ -161,12 +162,10 @@ class Pair(Handler):
             self.sock = socket.socket(
                 family=self._self_addr.sock_family,
                 type=self._self_addr.sock_type,
-                proto=self._self_addr.sock_protocol
+                proto=self._self_addr.sock_protocol,
             )
             # Set SO_REUSEADDR to allow that reuse of the listening port
-            self.sock.setsockopt(
-                socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
-            )
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.sock.bind(self._self_addr.addr)
             # backlog: queue up as many as 1 connect request
             self.sock.listen(1)
@@ -203,12 +202,10 @@ class Pair(Handler):
                 self.sock = socket.socket(
                     family=self._self_addr.sock_family,
                     type=self._self_addr.sock_type,
-                    proto=self._self_addr.sock_protocol
+                    proto=self._self_addr.sock_protocol,
                 )
                 # Set SO_REUSEADDR to allow that reuse of the listening port
-                self.sock.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
-                )
+                self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 self.changeState(PairState.CONNECTING)
 
                 # Blocked until connected.
@@ -221,18 +218,23 @@ class Pair(Handler):
                 self.sock.connect_ex(self._peer_addr.addr)
                 self.changeState(PairState.CONNECTING)
                 self._event_loop.register(
-                    self.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, self)
+                    self.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, self
+                )
 
                 self.waitUntilConnected(timeout=None)
 
         logger.debug(f"{self.self_rank}: connect func done")
 
     def waitUntilConnected(self, timeout=None):
-        def pred(): return self.state == PairState.CONNECTED
+        def pred():
+            return self.state == PairState.CONNECTED
+
         self._cv.wait_for(pred, timeout)
 
     def waitUntilClosed(self, timeout=None):
-        def pred(): return self.state == PairState.CLOSED
+        def pred():
+            return self.state == PairState.CLOSED
+
         self._cv.wait_for(pred, timeout)
 
     def close(self):
@@ -268,8 +270,7 @@ class Pair(Handler):
         """Triggered by the selector. Note it is called under a different thread."""
         with self._mutex:
             if self.state == PairState.CLOSED:
-                logger.warning(
-                    "Handle the event when the pair is already closed")
+                logger.warning("Handle the event when the pair is already closed")
                 return
 
             if self.state == PairState.LISTENING:
@@ -291,9 +292,11 @@ class Pair(Handler):
                 self.handleConnected(event)
             else:
                 logger.warning(
-                    f'unexpected PairState: {self.state} when handling the event')
+                    f"unexpected PairState: {self.state} when handling the event"
+                )
             logger.debug(
-                f"{self.self_rank}: Done handle event {event} with State {self.state}")
+                f"{self.self_rank}: Done handle event {event} with State {self.state}"
+            )
 
     def handleListening(self, event: int):
         conn, addr = self.sock.accept()
@@ -328,7 +331,8 @@ class Pair(Handler):
         self.sock.setblocking(False)
         # We only need read since we actively send out information
         self._event_loop.register(
-            self.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, self)
+            self.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, self
+        )
 
         self.changeState(PairState.CONNECTED)
 
@@ -347,8 +351,8 @@ class Pair(Handler):
         # TODO: make a queue to send the message seperately
         recv = 0  # number of bytes received
         header = None
-        header_bytes = b''
-        end_pos = envelope.offset+envelope.nbytes
+        header_bytes = b""
+        end_pos = envelope.offset + envelope.nbytes
 
         logger.debug("handle read envelope %s", envelope)
         while True:
@@ -356,18 +360,24 @@ class Pair(Handler):
             try:
                 # Should be ready to read
                 if recv < HEADER_LENGTH:
-                    _header = self.sock.recv(HEADER_LENGTH-recv)
+                    _header = self.sock.recv(HEADER_LENGTH - recv)
                     recv += len(_header)
                     header_bytes += _header
 
                 if header is not None:
                     start_pos = envelope.offset + recv - HEADER_LENGTH
-                    max_recv = min(2048, end_pos-start_pos)
+                    max_recv = min(2048, end_pos - start_pos)
                     num_bytes_recv = self.sock.recv_into(
-                        envelope.buf.buffer_view[start_pos:end_pos], max_recv)
+                        envelope.buf.buffer_view[start_pos:end_pos], max_recv
+                    )
 
-                    logger.error("header: %s (%d, %d): %d", header,
-                                 start_pos, end_pos, num_bytes_recv)
+                    logger.error(
+                        "header: %s (%d, %d): %d",
+                        header,
+                        start_pos,
+                        end_pos,
+                        num_bytes_recv,
+                    )
                 else:
                     num_bytes_recv = 0
 
@@ -382,8 +392,10 @@ class Pair(Handler):
             if len(header_bytes) >= HEADER_LENGTH:
                 header = _phrase_header(header_bytes)
                 if header.content_length > envelope.nbytes:
-                    raise BufferError("Recv Buffer size should be equal or "
-                                      "larger than the sending one.")
+                    raise BufferError(
+                        "Recv Buffer size should be equal or "
+                        "larger than the sending one."
+                    )
 
             if header is not None:
                 content_len = header.content_length
@@ -395,7 +407,7 @@ class Pair(Handler):
 
     def _write(self, envelope: Envelope):
         header = _create_header(envelope.nbytes)
-        end_pos = envelope.offset+envelope.nbytes
+        end_pos = envelope.offset + envelope.nbytes
         sent = 0  # number of bytes sent
         # logger.debug(f"{self.self_rank}: trigged write")
 
@@ -421,29 +433,25 @@ class Pair(Handler):
         logger.debug("handle write envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
 
-    def send(self, buf: Buffer, handle: int,
-             nbytes: int, offset: int, slot: int):
+    def send(self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int):
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
             if self.state != PairState.CONNECTED:
-                raise RuntimeError('The pair socket must be in the CONNECTED state '
-                                   'before calling the send.')
+                raise RuntimeError(
+                    "The pair socket must be in the CONNECTED state "
+                    "before calling the send."
+                )
 
-            envelope = Envelope(buf=buf,
-                                handle=handle,
-                                offset=offset,
-                                nbytes=nbytes)
+            envelope = Envelope(buf=buf, handle=handle, offset=offset, nbytes=nbytes)
             self._pending_send.append(envelope)
 
-    def recv(self,  buf: Buffer, handle: int,
-             nbytes: int, offset: int, slot: int):
+    def recv(self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int):
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
             if self.state != PairState.CONNECTED:
-                raise RuntimeError('The pair socket must be in the CONNECTED state '
-                                   'before calling the recv.')
-            envelope = Envelope(buf=buf,
-                                handle=handle,
-                                offset=offset,
-                                nbytes=nbytes)
+                raise RuntimeError(
+                    "The pair socket must be in the CONNECTED state "
+                    "before calling the recv."
+                )
+            envelope = Envelope(buf=buf, handle=handle, offset=offset, nbytes=nbytes)
             self._pending_recv.append(envelope)

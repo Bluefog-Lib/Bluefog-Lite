@@ -28,10 +28,7 @@ BASE_PART = 18106  # Looks like 1BL[UEUF]OG
 # Each Context should represent entire communication group like  (comm in MPI)
 # In each Context, it contains multiple Pairs, i.e. socket pair, talking to other neighbor.
 # Op `send` and `recv`` should be attached to a fixed memory buffer.
-
-
 class Agent(object):
-
     def __init__(self, address: Optional[SocketAddress] = None):
         # One event loop process the events of all socket pairs
         self.event_loop: EventLoop = EventLoop()
@@ -41,16 +38,17 @@ class Agent(object):
 
     def createAgentAddress(self, *, rank, size) -> SocketAddress:
         return SocketAddress(
-            addr=('localhost', BASE_PART + rank * size),
+            addr=("localhost", BASE_PART + rank * size),
             sock_family=socket.AF_INET,
             sock_type=socket.SOCK_STREAM,
-            sock_protocol=0
+            sock_protocol=0,
         )
 
     def createContext(self, *, rank, size):
         address = self.createAgentAddress(rank=rank, size=size)
         self.context = AgentContext(
-            event_loop=self.event_loop, rank=rank, size=size, address=address)
+            event_loop=self.event_loop, rank=rank, size=size, address=address
+        )
 
     def close(self):
         if self.context:
@@ -59,12 +57,13 @@ class Agent(object):
 
 
 class AgentContext:
-
-    def __init__(self, *, event_loop: EventLoop, rank: int, size: int, address: SocketAddress):
+    def __init__(
+        self, *, event_loop: EventLoop, rank: int, size: int, address: SocketAddress
+    ):
         self.rank = rank
         self.size = size
         self.address = address
-        self.pairs: Dict[int, 'Pair'] = {}
+        self.pairs: Dict[int, "Pair"] = {}
         self._event_loop = event_loop
 
     def getPair(self, peer_rank):
@@ -74,12 +73,13 @@ class AgentContext:
 
     def createPair(self, peer_rank):
         pair_address = self.address
-        pair_address.addr = (
-            pair_address.addr[0], pair_address.addr[1] + peer_rank)
-        pair = Pair(event_loop=self._event_loop,
-                    self_rank=self.rank,
-                    peer_rank=peer_rank,
-                    address=pair_address)
+        pair_address.addr = (pair_address.addr[0], pair_address.addr[1] + peer_rank)
+        pair = Pair(
+            event_loop=self._event_loop,
+            self_rank=self.rank,
+            peer_rank=peer_rank,
+            address=pair_address,
+        )
         self.pairs[peer_rank] = pair
         return pair
 
@@ -101,6 +101,7 @@ class AgentContext:
             if peer_rank == (self_rank - 1) % size:
                 return True
             return False
+
         return self._connectGivenNeighborFunc(store, ring_neighbor_fn)
 
     def _connectGivenNeighborFunc(self, store, neighbor_fn):
@@ -119,7 +120,7 @@ class AgentContext:
         logger.debug("start listening done")
 
         # we need a global store to share between all processes.
-        store.set(f'rank_addr_{self.rank}', self._all_address)
+        store.set(f"rank_addr_{self.rank}", self._all_address)
 
         # Connect others
         for i in range(self.size):
@@ -127,7 +128,7 @@ class AgentContext:
             if i == self.rank or not is_neighbor:
                 continue
             # Other's file store
-            others_all_address = store.get(f'rank_addr_{i}')
+            others_all_address = store.get(f"rank_addr_{i}")
             # The listening address open for self.
             addr = others_all_address[self.rank]
             logger.debug(f"{self.rank} connect to {i}, addr {addr}")

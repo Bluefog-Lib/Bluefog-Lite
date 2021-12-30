@@ -26,21 +26,33 @@ import bluefoglite as bfl
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='BluefogLite Launcher')
+    parser = argparse.ArgumentParser(description="BluefogLite Launcher")
 
-    parser.add_argument('-v', '--version', action="store_true", dest="version",
-                        help="Shows bluefog version.")
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="store_true",
+        dest="version",
+        help="Shows bluefog version.",
+    )
 
-    parser.add_argument('-np', '--num-proc', action="store", dest="np",
-                        type=int, help="Total number of training processes.")
+    parser.add_argument(
+        "-np",
+        "--num-proc",
+        action="store",
+        dest="np",
+        type=int,
+        help="Total number of training processes.",
+    )
 
-    parser.add_argument('command', nargs=argparse.REMAINDER,
-                        help="Command to be executed.")
+    parser.add_argument(
+        "command", nargs=argparse.REMAINDER, help="Command to be executed."
+    )
 
     parsed_args = parser.parse_args()
 
     if not parsed_args.version and not parsed_args.np:
-        parser.error('argument -np/--num-proc is required')
+        parser.error("argument -np/--num-proc is required")
 
     return parsed_args
 
@@ -56,7 +68,7 @@ def _maybe_kill_process(pid_list):
 
 def cleanup(shared_file_dir):
     if os.path.exists(shared_file_dir):
-        for f in glob.glob(os.path.join(shared_file_dir, '*')):
+        for f in glob.glob(os.path.join(shared_file_dir, "*")):
             try:
                 os.remove(f)
             except OSError as e:
@@ -74,7 +86,7 @@ def main():
 
     p_ctx_list, pid_list = [], []
     runtime_str = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    shared_file_dir = os.path.join('/tmp', '.bluefoglite', runtime_str)
+    shared_file_dir = os.path.join("/tmp", ".bluefoglite", runtime_str)
     if not os.path.exists(shared_file_dir):
         os.makedirs(shared_file_dir)
 
@@ -82,13 +94,14 @@ def main():
 
     for i in range(args.np):
         env = os.environ.copy()
-        env['BFL_WORLD_RANK'] = str(i)
-        env['BFL_WORLD_SIZE'] = str(args.np)
-        env['BFL_FILE_STORE'] = shared_file_dir
+        env["BFL_WORLD_RANK"] = str(i)
+        env["BFL_WORLD_SIZE"] = str(args.np)
+        env["BFL_FILE_STORE"] = shared_file_dir
         stdout = None
         stderr = subprocess.STDOUT
-        p_ctx = subprocess.Popen(args.command, shell=False, env=env,
-                                 stdout=stdout, stderr=stderr)
+        p_ctx = subprocess.Popen(
+            args.command, shell=False, env=env, stdout=stdout, stderr=stderr
+        )
         p_ctx_list.append(p_ctx)
         pid_list.append(p_ctx.pid)
 

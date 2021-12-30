@@ -17,10 +17,8 @@ import threading
 from typing import Dict, Optional
 
 # This should be a singleton class
-
-
 class HandleManager:
-    __instance: Optional['HandleManager'] = None
+    __instance: Optional["HandleManager"] = None
 
     @staticmethod
     def getInstance():
@@ -31,8 +29,9 @@ class HandleManager:
 
     def __init__(self):
         if self.__instance is not None:
-            raise RuntimeError("HandleManager is singleton and "
-                               "should be used with getInstance().")
+            raise RuntimeError(
+                "HandleManager is singleton and " "should be used with getInstance()."
+            )
         self.status: Dict[int, bool] = {}  # Handle -> Finished Or Not
         self._last_handle = -1  # should be atomic<int> but it is fine in python
         self.mutex = threading.Lock()

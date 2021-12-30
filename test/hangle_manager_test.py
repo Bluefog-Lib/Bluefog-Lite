@@ -38,8 +38,9 @@ def test_handle_manager_allocate(num_thread, incr):
             prev_handle = handle
             time.sleep(0.01)
 
-    thread_list = [threading.Thread(target=allocate, args=(incr,))
-                   for _ in range(num_thread)]
+    thread_list = [
+        threading.Thread(target=allocate, args=(incr,)) for _ in range(num_thread)
+    ]
 
     for t in thread_list:
         t.start()
@@ -53,7 +54,6 @@ def test_handle_manager_allocate(num_thread, incr):
 
 @pytest.mark.parametrize("sleep_time", [0.5, 1, 1.5])
 def test_handle_manager_wait(sleep_time):
-
     def allocate_markdone():
         hm = HandleManager.getInstance()
 

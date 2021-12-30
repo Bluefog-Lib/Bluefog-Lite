@@ -47,10 +47,10 @@ def rank(group=None):
 def send(dst, obj_or_array, *, tag=0, group=None):
     if group is None:
         group = _global_group
-    group.send(dst=dst, obj_or_array=obj_or_array,  tag=tag)
+    group.send(dst=dst, obj_or_array=obj_or_array, tag=tag)
 
 
 def recv(src, obj_or_array, *, tag=0, group=None):
     if group is None:
         group = _global_group
-    return group.recv(src=src, obj_or_array=obj_or_array,  tag=tag)
+    return group.recv(src=src, obj_or_array=obj_or_array, tag=tag)

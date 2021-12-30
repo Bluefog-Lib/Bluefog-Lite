@@ -32,14 +32,15 @@ def _multi_thread_help(size, fn, timeout=10):
 
     def wrap_fn(rank, size):
         try:
-            os.environ['BFL_WORLD_RANK'] = str(rank)
-            os.environ['BFL_WORLD_SIZE'] = str(size)
+            os.environ["BFL_WORLD_RANK"] = str(rank)
+            os.environ["BFL_WORLD_SIZE"] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:
             errors.append(e)
 
-    thread_list = [threading.Thread(target=wrap_fn, args=(rank, size))
-                   for rank in range(size)]
+    thread_list = [
+        threading.Thread(target=wrap_fn, args=(rank, size)) for rank in range(size)
+    ]
 
     for t in thread_list:
         t.start()
@@ -52,12 +53,15 @@ def _multi_thread_help(size, fn, timeout=10):
 
 @pytest.fixture
 def addr_list():
-    return [SocketAddress(
-        addr=('localhost', 18106+i),
-        sock_family=socket.AF_INET,
-        sock_type=socket.SOCK_STREAM,
-        sock_protocol=0,
-    ) for i in range(2)]
+    return [
+        SocketAddress(
+            addr=("localhost", 18106 + i),
+            sock_family=socket.AF_INET,
+            sock_type=socket.SOCK_STREAM,
+            sock_protocol=0,
+        )
+        for i in range(2)
+    ]
 
 
 @pytest.fixture
@@ -73,10 +77,10 @@ def test_connect(addr_list):
         pair = Pair(
             event_loop=event_loop,
             self_rank=rank,
-            peer_rank=1-rank,
-            address=addr_list[rank]
+            peer_rank=1 - rank,
+            address=addr_list[rank],
         )
-        pair.connect(addr_list[1-rank])
+        pair.connect(addr_list[1 - rank])
         pair.close()
         event_loop.close()
 
@@ -98,23 +102,21 @@ def test_send_recv(addr_list, array_list):
         pair = Pair(
             event_loop=event_loop,
             self_rank=rank,
-            peer_rank=1-rank,
-            address=addr_list[rank]
+            peer_rank=1 - rank,
+            address=addr_list[rank],
         )
-        pair.connect(addr_list[1-rank])
+        pair.connect(addr_list[1 - rank])
         hm = HandleManager.getInstance()
 
         if rank == 0:
             handle = hm.allocate()
             buf = _build_buf_from_array(array_list[0])
-            pair.send(buf, handle, nbytes=buf.buffer_length,
-                      offset=0, slot=0)
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
             hm.wait(handle=handle)
         elif rank == 1:
             handle = hm.allocate()
             buf = _build_buf_from_array(array_list[1])
-            pair.recv(buf, handle, nbytes=buf.buffer_length,
-                      offset=0, slot=0)
+            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
             hm.wait(handle=handle)
 
             time.sleep(0.1)

@@ -6,7 +6,7 @@ import numpy as np  # type: ignore
 
 bfl.init()
 # print(f"{bfl.rank()}: init done")
-print(f'I am rank {bfl.rank()} among size {bfl.size()}.')
+print(f"I am rank {bfl.rank()} among size {bfl.size()}.")
 
 if bfl.rank() == 0:
     data = np.array([1, 2, 3, 4])

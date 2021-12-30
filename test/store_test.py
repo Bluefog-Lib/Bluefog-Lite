@@ -24,7 +24,7 @@ from bluefoglite.common.store import InMemoryStore, FileStore
 import pytest  # type: ignore
 
 runtime_str = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-shared_file_dir = os.path.join('/tmp', '.bluefoglite', runtime_str)
+shared_file_dir = os.path.join("/tmp", ".bluefoglite", runtime_str)
 if not os.path.exists(shared_file_dir):
     os.makedirs(shared_file_dir)
 STORES = [InMemoryStore(), FileStore(shared_file_dir)]
@@ -43,14 +43,15 @@ def _multi_thread_help(size, fn, timeout=10):
 
     def wrap_fn(rank, size):
         try:
-            os.environ['BFL_WORLD_RANK'] = str(rank)
-            os.environ['BFL_WORLD_SIZE'] = str(size)
+            os.environ["BFL_WORLD_RANK"] = str(rank)
+            os.environ["BFL_WORLD_SIZE"] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:
             errors.append(e)
 
-    thread_list = [threading.Thread(target=wrap_fn, args=(rank, size))
-                   for rank in range(size)]
+    thread_list = [
+        threading.Thread(target=wrap_fn, args=(rank, size)) for rank in range(size)
+    ]
 
     for t in thread_list:
         t.start()
@@ -94,10 +95,10 @@ def test_set_get_multiple(store):
 
     def fn(rank, size):
         try:
-            store.set(key+str(rank), value+str(rank))
+            store.set(key + str(rank), value + str(rank))
             for i in range(size):
-                get_value = store.get(key+str(i))
-                assert get_value == value+str(i)
+                get_value = store.get(key + str(i))
+                assert get_value == value + str(i)
         except Exception as e:
             errors.append(e)
 
