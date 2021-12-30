@@ -1,10 +1,18 @@
-from array import array
-import atexit
-import datetime
-import functools
-import glob
-import itertools
-import multiprocessing
+# Copyright 2021 Bluefog Team. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
 import os
 import socket
 import threading
@@ -15,13 +23,13 @@ from bluefoglite.common.handle_manager import HandleManager
 from bluefoglite.common.tcp.buffer import Buffer
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketAddress
-import numpy as np
+import numpy as np  # type: ignore
 import pytest  # type: ignore
 
 
 def _multi_thread_help(size, fn, timeout=10):
     errors = []
-    
+
     def wrap_fn(rank, size):
         try:
             os.environ['BFL_WORLD_RANK'] = str(rank)
@@ -73,13 +81,15 @@ def test_connect(addr_list):
         event_loop.close()
 
     errors = _multi_thread_help(size=2, fn=listen_connect_close)
-    
+
     for error in errors:
         raise error
+
 
 def _build_buf_from_array(array):
     mock_context = MagicMock()
     return Buffer(mock_context, array.data, array.nbytes)
+
 
 def test_send_recv(addr_list, array_list):
     def listen_connect_close(rank, size):
@@ -103,10 +113,10 @@ def test_send_recv(addr_list, array_list):
         elif rank == 1:
             handle = hm.allocate()
             buf = _build_buf_from_array(array_list[1])
-            pair.recv(buf, handle, nbytes=buf.buffer_length, 
+            pair.recv(buf, handle, nbytes=buf.buffer_length,
                       offset=0, slot=0)
             hm.wait(handle=handle)
-            
+
             time.sleep(0.1)
 
             # np.testing.assert_allclose(array_list[1], array_list[0])

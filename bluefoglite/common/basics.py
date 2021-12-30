@@ -1,3 +1,18 @@
+# Copyright 2021 Bluefog Team. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
+
 import io
 import json
 import os
@@ -57,8 +72,8 @@ class BlueFogLiteGroup(object):
 
     def send(self, dst, obj_or_array, tag=0):
         self._check_rank(dst)
-        
-        # TODO check send/recv type? 
+
+        # TODO check send/recv type?
         if isinstance(obj_or_array, np.ndarray):
             buf = Buffer(self._agent.context, obj_or_array.data,
                          obj_or_array.nbytes)
@@ -66,14 +81,14 @@ class BlueFogLiteGroup(object):
             message = _json_encode(obj_or_array, 'utf-8')
             buf = Buffer(self._agent.context,
                          memoryview(message), len(message))
-        
+
         # TODO: Check if dst is neighbor or not
         buf.send(dst)
 
     def recv(self, src, obj_or_array=None, tag=0):
         self._check_rank(src)
-        
-        # TODO check send/recv type? 
+
+        # TODO check send/recv type?
         if isinstance(obj_or_array, np.ndarray):
             buf = Buffer(self._agent.context, obj_or_array.data,
                          obj_or_array.nbytes)
