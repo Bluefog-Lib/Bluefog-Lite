@@ -47,4 +47,4 @@ jobs:
     - name: Unit Test
       run: |
         python -m pip install pytest
-        timeout 5m pytest -s -vv test
+        pytest -s -vv test
