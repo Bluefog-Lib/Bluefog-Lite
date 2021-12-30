@@ -19,7 +19,7 @@ import os
 from typing import Any, Dict, Optional
 
 from bluefoglite.common.tcp.agent import Agent
-from bluefoglite.common.tcp.buffer import Buffer
+from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.store import FileStore
 from bluefoglite.common.logger import logger
 
@@ -71,10 +71,14 @@ class BlueFogLiteGroup(object):
 
         # TODO check send/recv type?
         if isinstance(obj_or_array, np.ndarray):
-            buf = Buffer(self._agent.context, obj_or_array.data, obj_or_array.nbytes)
+            buf = SpecifiedBuffer(
+                self._agent.context, obj_or_array.data, obj_or_array.nbytes
+            )
         else:
             message = _json_encode(obj_or_array, "utf-8")
-            buf = Buffer(self._agent.context, memoryview(message), len(message))
+            buf = SpecifiedBuffer(
+                self._agent.context, memoryview(message), len(message)
+            )
 
         # TODO: Check if dst is neighbor or not
         buf.send(dst)
@@ -84,11 +88,14 @@ class BlueFogLiteGroup(object):
 
         # TODO check send/recv type?
         if isinstance(obj_or_array, np.ndarray):
-            buf = Buffer(self._agent.context, obj_or_array.data, obj_or_array.nbytes)
+            buf = SpecifiedBuffer(
+                self._agent.context, obj_or_array.data, obj_or_array.nbytes
+            )
+            # TODO: Check if src is neighbor or not
+            buf.recv(src)
+            return obj_or_array
         else:
-            raise NotImplemented
-            buf = Buffer(self._agent.context, memoryview(message), len(message))
-
-        # TODO: Check if src is neighbor or not
-        buf.recv(src)
-        return obj_or_array
+            ubuf = UnspecifiedBuffer(self._agent.context)
+            ubuf.recv(src)
+            obj = _json_decode(ubuf.data, "utf-8")
+            return obj

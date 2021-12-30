@@ -20,7 +20,7 @@ import time
 from unittest.mock import MagicMock
 
 from bluefoglite.common.handle_manager import HandleManager
-from bluefoglite.common.tcp.buffer import Buffer
+from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketAddress
 import numpy as np  # type: ignore
@@ -90,13 +90,13 @@ def test_connect(addr_list):
         raise error
 
 
-def _build_buf_from_array(array):
+def _build_sbuf_from_array(array):
     mock_context = MagicMock()
-    return Buffer(mock_context, array.data, array.nbytes)
+    return SpecifiedBuffer(mock_context, array.data, array.nbytes)
 
 
-def test_send_recv(addr_list, array_list):
-    def listen_connect_close(rank, size):
+def test_send_recv_array(addr_list, array_list):
+    def send_recv_array(rank, size):
         event_loop = EventLoop()
         event_loop.run()
         pair = Pair(
@@ -110,23 +110,53 @@ def test_send_recv(addr_list, array_list):
 
         if rank == 0:
             handle = hm.allocate()
-            buf = _build_buf_from_array(array_list[0])
+            buf = _build_sbuf_from_array(array_list[0])
             pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
             hm.wait(handle=handle)
         elif rank == 1:
             handle = hm.allocate()
-            buf = _build_buf_from_array(array_list[1])
+            buf = _build_sbuf_from_array(array_list[1])
             pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
             hm.wait(handle=handle)
-
-            time.sleep(0.1)
-
-            # np.testing.assert_allclose(array_list[1], array_list[0])
-
+            np.testing.assert_allclose(array_list[1], array_list[0])
         pair.close()
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=listen_connect_close)
+    errors = _multi_thread_help(size=2, fn=send_recv_array)
+
+    for error in errors:
+        raise error
+
+
+def test_send_recv_obj(addr_list):
+    def send_recv_obj(rank, size):
+        event_loop = EventLoop()
+        event_loop.run()
+        pair = Pair(
+            event_loop=event_loop,
+            self_rank=rank,
+            peer_rank=1 - rank,
+            address=addr_list[rank],
+        )
+        pair.connect(addr_list[1 - rank])
+        hm = HandleManager.getInstance()
+        data = b"jisdnoldf"
+
+        if rank == 0:
+            handle = hm.allocate()
+            buf = SpecifiedBuffer(MagicMock(), memoryview(data), len(data))
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            hm.wait(handle=handle)
+        elif rank == 1:
+            handle = hm.allocate()
+            ubuf = UnspecifiedBuffer(MagicMock())
+            pair.recv(ubuf, handle, nbytes=-1, offset=0, slot=0)
+            hm.wait(handle=handle)
+            assert ubuf.data == data
+        pair.close()
+        event_loop.close()
+
+    errors = _multi_thread_help(size=2, fn=send_recv_obj)
 
     for error in errors:
         raise error

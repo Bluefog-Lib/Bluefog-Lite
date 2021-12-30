@@ -14,6 +14,7 @@
 # ==============================================================================
 
 
+import abc
 import threading
 from typing import TYPE_CHECKING
 
@@ -23,18 +24,41 @@ if TYPE_CHECKING:
     from bluefoglite.common.tcp.agent import AgentContext
 
 
-class Buffer:
+class Buffer(abc.ABC):
+    def __init__(self) -> None:
+        self.data = b""
+        self.buffer_view = memoryview(self.data)
+        self.buffer_length = 0
+        self.mutex = threading.Lock()
+        self.cv = threading.Condition(self.mutex)
+        self.hm = HandleManager.getInstance()
+
+    def waitCompletion(self, handle: int, timeout=None):
+        assert self.hm.wait(handle=handle, timeout=timeout)
+        self.hm.release(handle=handle)
+
+    def handleCompletion(self, handle):
+        self.hm.markDone(handle)
+
+    @abc.abstractmethod
+    def irecv(
+        self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
+    ) -> int:
+        raise NotImplemented
+
+    @abc.abstractmethod
+    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
+        raise NotImplemented
+
+
+class SpecifiedBuffer(Buffer):
     def __init__(
         self, context: "AgentContext", buffer_view: memoryview, buffer_length: int
     ) -> None:
+        super().__init__()
         self.context = context
         self.buffer_view = buffer_view
         self.buffer_length = buffer_length
-
-        self.hm = HandleManager.getInstance()
-
-        self.mutex = threading.Lock()
-        self.cv = threading.Condition(self.mutex)
 
     def isend(
         self, dst: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
@@ -70,9 +94,21 @@ class Buffer:
         handle = self.irecv(src, nbytes=nbytes, offset=offset, slot=slot)
         self.waitCompletion(handle)
 
-    def waitCompletion(self, handle: int, timeout=None):
-        assert self.hm.wait(handle=handle, timeout=timeout)
-        self.hm.release(handle=handle)
 
-    def handleCompletion(self, handle):
-        self.hm.markDone(handle)
+class UnspecifiedBuffer(Buffer):
+    def __init__(self, context: "AgentContext"):
+        super().__init__()
+        self.context = context
+        self.data = b""
+
+    def irecv(
+        self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
+    ) -> int:
+        handle = self.hm.allocate()
+        # TODO Make some verificaiton here
+        self.context.getPair(src).recv(self, handle=handle, nbytes=-1, offset=0, slot=0)
+        return handle
+
+    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
+        handle = self.irecv(src)
+        self.waitCompletion(handle)

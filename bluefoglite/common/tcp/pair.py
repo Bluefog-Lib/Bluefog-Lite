@@ -365,19 +365,17 @@ class Pair(Handler):
                     header_bytes += _header
 
                 if header is not None:
-                    start_pos = envelope.offset + recv - HEADER_LENGTH
-                    max_recv = min(2048, end_pos - start_pos)
-                    num_bytes_recv = self.sock.recv_into(
-                        envelope.buf.buffer_view[start_pos:end_pos], max_recv
-                    )
-
-                    logger.error(
-                        "header: %s (%d, %d): %d",
-                        header,
-                        start_pos,
-                        end_pos,
-                        num_bytes_recv,
-                    )
+                    if envelope.nbytes != -1:
+                        start_pos = envelope.offset + recv - HEADER_LENGTH
+                        max_recv = min(2048, end_pos - start_pos)
+                        num_bytes_recv = self.sock.recv_into(
+                            envelope.buf.buffer_view[start_pos:end_pos], max_recv
+                        )
+                    else:
+                        # unspecified buffer.
+                        _data = self.sock.recv(2048)
+                        num_bytes_recv = len(_data)
+                        envelope.buf.data += _data
                 else:
                     num_bytes_recv = 0
 
@@ -391,7 +389,10 @@ class Pair(Handler):
 
             if len(header_bytes) >= HEADER_LENGTH:
                 header = _phrase_header(header_bytes)
-                if header.content_length > envelope.nbytes:
+                if envelope.nbytes == -1:
+                    # Unspecified buffer so no check.
+                    pass
+                elif header.content_length > envelope.nbytes:
                     raise BufferError(
                         "Recv Buffer size should be equal or "
                         "larger than the sending one."
