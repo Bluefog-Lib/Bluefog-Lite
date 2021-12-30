@@ -24,7 +24,7 @@ jobs:
     - name: Unit Test
       run: |
         python -m pip install pytest
-        pytest -s -vv test
+        timeout 5m pytest -s -vv test
 
   macos-unit-test:
     
@@ -47,4 +47,4 @@ jobs:
     - name: Unit Test
       run: |
         python -m pip install pytest
-        pytest -s -vv test
+        timeout 5m pytest -s -vv test
