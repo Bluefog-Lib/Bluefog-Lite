@@ -21,10 +21,7 @@ from bluefoglite.common.handle_manager import HandleManager
 import pytest  # type: ignore
 
 
-@pytest.mark.parametrize(
-    "num_thread,incr",
-    itertools.product([2, 4, 6], [3, 40, 5]),
-)
+@pytest.mark.parametrize("num_thread,incr", itertools.product([2, 4, 6], [3, 40, 5]))
 def test_handle_manager_allocate(num_thread, incr):
     hm = HandleManager.getInstance()
 

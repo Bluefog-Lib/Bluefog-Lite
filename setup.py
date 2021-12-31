@@ -16,18 +16,18 @@
 from setuptools import find_packages, setup  # type: ignore
 from bluefoglite.version import __version__
 
-NAME = 'bluefoglite'
+NAME = "bluefoglite"
 DESCRIPTION = "A lite implementation for Bluefog"
 EMAIL = "bichengying@gmail.com"
 AUTHOR = "Bicheng Ying"
 REQUIRES_PYTHON = ">=3.7.0"
 VERSION = __version__
 
-with open('LICENSE') as f:
+with open("LICENSE") as f:
     license = f.read()
 
-with open('requirements.txt') as f:
-    requirements = list(f.read().strip().split('\n'))
+with open("requirements.txt") as f:
+    requirements = list(f.read().strip().split("\n"))
 
 
 setup(
@@ -37,13 +37,9 @@ setup(
     url="https://github.com/bluefog-lib/bluefog",
     author=AUTHOR,
     author_email=EMAIL,
-    python_requires='>=3.7.0',
+    python_requires=">=3.7.0",
     install_requires=requirements,
     packages=find_packages(exclude=["test", "examples"]),
     license=license,
-    entry_points={
-        'console_scripts': [
-            'bflrun = bluefoglite.launch.run:main',
-        ],
-    },
+    entry_points={"console_scripts": ["bflrun = bluefoglite.launch.run:main"]},
 )
