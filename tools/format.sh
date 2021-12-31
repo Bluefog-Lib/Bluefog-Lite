@@ -20,6 +20,7 @@ if (( only_print == 1 )); then
 fi
 format_files=$(find . -name "*.py")
 
+echo "$(black --version)"
 LOGS="$(black "${args[@]}" ${format_files} 2>&1)"
 STATUS=$?
 echo "$LOGS"

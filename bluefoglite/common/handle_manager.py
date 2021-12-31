@@ -22,7 +22,7 @@ class HandleManager:
 
     @staticmethod
     def getInstance():
-        """ Static access method. """
+        """Static access method."""
         if HandleManager.__instance == None:
             HandleManager.__instance = HandleManager()
         return HandleManager.__instance
