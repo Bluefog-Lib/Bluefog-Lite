@@ -160,3 +160,35 @@ def test_send_recv_obj(addr_list):
 
     for error in errors:
         raise error
+
+
+def test_send_after_close(addr_list, array_list):
+    def send_after_close(rank, size):
+        event_loop = EventLoop()
+        event_loop.run()
+        pair = Pair(
+            event_loop=event_loop,
+            self_rank=rank,
+            peer_rank=1 - rank,
+            address=addr_list[rank],
+        )
+        pair.connect(addr_list[1 - rank])
+        hm = HandleManager.getInstance()
+
+        if rank == 0:
+            handle = hm.allocate()
+            buf = _build_sbuf_from_array(array_list[0])
+            time.sleep(0.5)  # wait to send
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            hm.wait(handle=handle)
+            pair.close()
+        elif rank == 1:
+            # Close immediately
+            pair.close()
+
+        event_loop.close()
+
+    errors = _multi_thread_help(size=2, fn=send_after_close)
+
+    for error in errors:
+        raise error
