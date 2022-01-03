@@ -63,6 +63,7 @@ confidence=
 disable=
     bad-continuation,
     fixme,
+    import-error,
     invalid-name,
     missing-docstring,
     too-few-public-methods,
