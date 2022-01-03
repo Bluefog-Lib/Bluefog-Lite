@@ -34,6 +34,23 @@ jobs:
       run: tools/lint.sh --version
     - name: Format
       run: tools/lint.sh
+    
+  mypy:
+    name: mypy check
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+    - name: Install pylint
+      run: cat tools/requirements_dev.txt | grep mypy | xargs pip install
+    - name: Display version
+      run: tools/mypy.sh --version
+    - name: Format
+      run: tools/mypy.sh
 
   ubuntu-unit-test:
 

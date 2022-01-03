@@ -48,7 +48,7 @@ class FileStore:
         self.wait([key], timeout)
         with open(self._get_key_path(key), "rb") as f:
             tried = 0
-            while tried < 10:
+            while True:
                 try:
                     value = pickle.load(f)
                     return value
@@ -57,7 +57,8 @@ class FileStore:
                     # not finished the writting yet.
                     time.sleep(0.01)
                     tried += 1
-            raise e
+                    if tried > 10:
+                        raise e
 
     def delete(self, key: str) -> bool:
         if not self._check_exist(key):
