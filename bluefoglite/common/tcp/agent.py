@@ -14,7 +14,6 @@
 # ==============================================================================
 
 
-import dataclasses
 import socket
 from typing import Dict, Optional
 
@@ -28,7 +27,7 @@ BASE_PART = 18106  # Looks like 1BL[UEUF]OG
 # Each Context should represent entire communication group like  (comm in MPI)
 # In each Context, it contains multiple Pairs, i.e. socket pair, talking to other neighbor.
 # Op `send` and `recv`` should be attached to a fixed memory buffer.
-class Agent(object):
+class Agent:
     def __init__(self, address: Optional[SocketAddress] = None):
         # One event loop process the events of all socket pairs
         self.event_loop: EventLoop = EventLoop()
@@ -36,7 +35,9 @@ class Agent(object):
 
         self.event_loop.run()
 
-    def createAgentAddress(self, *, rank, size) -> SocketAddress:
+    def createAgentAddress(  # pylint: disable=no-self-use
+        self, *, rank, size
+    ) -> SocketAddress:
         return SocketAddress(
             addr=("localhost", BASE_PART + rank * size),
             sock_family=socket.AF_INET,
@@ -84,12 +85,13 @@ class AgentContext:
         return pair
 
     def close(self):
-        for peer_rank, pair in self.pairs.items():
+        for _, pair in self.pairs.items():
             pair.close()
         self.pairs = {}
 
     def connectFull(self, store):
         def full_neighbor_fn(self_rank, peer_rank, size):
+            del self_rank, peer_rank, size
             return True
 
         return self._connectGivenNeighborFunc(store, full_neighbor_fn)
@@ -106,21 +108,21 @@ class AgentContext:
 
     def _connectGivenNeighborFunc(self, store, neighbor_fn):
         # It store the self address listening for the other ranks.
-        self._all_address = []
+        _all_address = []
 
         for i in range(self.size):
             is_neighbor = neighbor_fn(self.rank, i, self.size)
             if i == self.rank or not is_neighbor:
                 # Just placeholder
-                self._all_address.append(None)
+                _all_address.append(None)
                 continue
             pair = self.createPair(i)
-            self._all_address.append(pair.self_address)
+            _all_address.append(pair.self_address)
 
         logger.debug("start listening done")
 
         # we need a global store to share between all processes.
-        store.set(f"rank_addr_{self.rank}", self._all_address)
+        store.set(f"rank_addr_{self.rank}", _all_address)
 
         # Connect others
         for i in range(self.size):
@@ -131,7 +133,7 @@ class AgentContext:
             others_all_address = store.get(f"rank_addr_{i}")
             # The listening address open for self.
             addr = others_all_address[self.rank]
-            logger.debug(f"{self.rank} connect to {i}, addr {addr}")
+            logger.debug("%d connect to %d, addr %s", self.rank, i, addr)
 
             pair = self.getPair(i)
             pair.connect(addr)

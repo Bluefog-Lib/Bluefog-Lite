@@ -14,12 +14,10 @@
 # ==============================================================================
 
 import abc
-import functools
-import select
 import selectors
 import socket
 import threading
-from typing import Callable, Dict, List, Union
+from typing import Union
 from bluefoglite.common.logger import logger
 
 
@@ -30,7 +28,7 @@ class Handler(abc.ABC):
 
 
 # TODO(ybc) make this class singleton?
-class EventLoop(object):
+class EventLoop:
     def __init__(self):
         self.sel = selectors.DefaultSelector()
         self.done = False  # Python assignment to simple variable is "atomic"

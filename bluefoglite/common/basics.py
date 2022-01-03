@@ -16,14 +16,13 @@
 import io
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+import numpy as np  # type: ignore
 
 from bluefoglite.common.tcp.agent import Agent
 from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.store import FileStore
-from bluefoglite.common.logger import logger
-
-import numpy as np  # type: ignore
 
 
 def _json_encode(obj: Any, encoding: str) -> bytes:
@@ -37,9 +36,10 @@ def _json_decode(json_bytes: bytes, encoding: str) -> Dict:
     return obj
 
 
-class BlueFogLiteGroup(object):
+class BlueFogLiteGroup:
     def __init__(self) -> None:
         self._agent = None
+        self._store = None
 
     def init(self, store=None):
         self._agent = Agent()
@@ -52,11 +52,11 @@ class BlueFogLiteGroup(object):
         if self._agent is not None:
             self._agent.close()
 
-    def rank(self):
+    def rank(self):  # pylint: disable=no-self-use
         rank = os.getenv("BFL_WORLD_RANK")
         return int(rank) if rank else 0
 
-    def size(self):
+    def size(self):  # pylint: disable=no-self-use
         size = os.getenv("BFL_WORLD_SIZE")
         return int(size) if size else 1
 
@@ -94,8 +94,8 @@ class BlueFogLiteGroup(object):
             # TODO: Check if src is neighbor or not
             buf.recv(src)
             return obj_or_array
-        else:
-            ubuf = UnspecifiedBuffer(self._agent.context)
-            ubuf.recv(src)
-            obj = _json_decode(ubuf.data, "utf-8")
-            return obj
+
+        ubuf = UnspecifiedBuffer(self._agent.context)
+        ubuf.recv(src)
+        obj = _json_decode(ubuf.data, "utf-8")
+        return obj

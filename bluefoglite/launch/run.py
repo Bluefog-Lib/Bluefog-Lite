@@ -17,7 +17,6 @@ import argparse
 import atexit
 import glob
 import os
-import multiprocessing
 import signal
 import subprocess
 from datetime import datetime
@@ -73,7 +72,7 @@ def cleanup(shared_file_dir):
                 os.remove(f)
             except OSError as e:
                 # TODO logs to warning
-                pass
+                del e
         os.rmdir(shared_file_dir)
 
 
@@ -116,7 +115,7 @@ def main():
     while any(p_ctx.poll() is None for p_ctx in p_ctx_list):
         try:
             [p_ctx.wait(timeout=15) for p_ctx in p_ctx_list]
-        except:
+        except:  # pylint: disable=bare-except
             _maybe_kill_process(pid_list)
             break
 

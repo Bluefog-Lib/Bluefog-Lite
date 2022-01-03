@@ -17,6 +17,21 @@ jobs:
       run: cat tools/requirements_dev.txt | grep black | xargs pip install
     - name: Format
       run: tools/format.sh --checkonly
+  
+  lint:
+    name: Lint check
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+    - name: Install pylint
+      run: cat tools/requirements_dev.txt | grep pylint | xargs pip install
+    - name: Format
+      run: tools/lint.sh
 
   ubuntu-unit-test:
 

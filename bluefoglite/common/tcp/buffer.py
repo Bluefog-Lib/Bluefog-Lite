@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from bluefoglite.common.handle_manager import HandleManager
 
 if TYPE_CHECKING:
+    # pylint: disable=cyclic-import
     from bluefoglite.common.tcp.agent import AgentContext
 
 
@@ -44,11 +45,11 @@ class Buffer(abc.ABC):
     def irecv(
         self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
     ) -> int:
-        raise NotImplemented
+        return NotImplemented
 
     @abc.abstractmethod
     def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
-        raise NotImplemented
+        return NotImplemented
 
 
 class SpecifiedBuffer(Buffer):
@@ -67,7 +68,7 @@ class SpecifiedBuffer(Buffer):
             nbytes = self.buffer_length
 
         handle = self.hm.allocate()
-        # TODO Make some verificaiton here
+        # TODO: Make some verificaiton here
         self.context.getPair(dst).send(
             self, handle=handle, nbytes=nbytes, offset=offset, slot=slot
         )

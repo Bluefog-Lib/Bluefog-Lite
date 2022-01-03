@@ -68,7 +68,7 @@ class FileStore:
     def wait(self, keys: List[str], timeout: int = None):
         timeout_t = time.time() + timeout if timeout is not None else None
         remain_keys = [key for key in keys if not self._check_exist(key)]
-        while len(remain_keys) > 0:
+        while remain_keys:
             if timeout_t is not None and time.time() > timeout_t:
                 raise KeyError(f"Timeout for waiting the keys {remain_keys}")
             time.sleep(0.05)
@@ -84,8 +84,7 @@ class FileStore:
             try:
                 os.remove(f)
             except OSError as e:
-                # TODO logs to warning
-                pass
+                logger.debug("When reset the file store encountered: %s", e)
 
 
 class InMemoryStore:
@@ -116,7 +115,7 @@ class InMemoryStore:
         timeout_t = time.time() + timeout if timeout is not None else None
         remain_keys = [key for key in keys if key not in self.store]
         with self._mutex:
-            while len(remain_keys) > 0:
+            while remain_keys:
                 wait_timeout = (
                     timeout_t - time.time() if timeout_t is not None else None
                 )

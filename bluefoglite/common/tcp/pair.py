@@ -16,15 +16,11 @@
 import dataclasses
 import collections
 import enum
-import io
-import json
-from logging import log
 import selectors
 import socket
 import struct
-import sys
 import threading
-from typing import Any, Deque, Dict, Tuple, Optional
+from typing import Deque, Tuple, Optional
 
 from bluefoglite.common.tcp.buffer import Buffer
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
@@ -49,17 +45,6 @@ class SocketAddress:
     sock_protocol: int = 0
 
 
-def _json_encode(obj: Any, encoding: str) -> bytes:
-    return json.dumps(obj, ensure_ascii=False).encode(encoding)
-
-
-def _json_decode(json_bytes: bytes, encoding: str) -> Dict:
-    tiow = io.TextIOWrapper(io.BytesIO(json_bytes), encoding=encoding, newline="")
-    obj = json.load(tiow)
-    tiow.close()
-    return obj
-
-
 # Fix length-header
 Header = collections.namedtuple("Header", ["tag", "content_length"])
 # >iI means big-endian Int (4) + unsigned Int (4)
@@ -79,8 +64,8 @@ def _create_header(nbytes: int, tag: int = 0) -> bytes:
     return header_bytes
 
 
-def _phrase_header(bytes) -> Header:
-    return Header._make(struct.unpack(HEADER_FORMAT, bytes))
+def _phrase_header(head_bytes) -> Header:
+    return Header._make(struct.unpack(HEADER_FORMAT, head_bytes))
 
 
 class PairState(enum.Enum):
@@ -108,7 +93,7 @@ class Envelope:
     nbytes: int = 0
 
 
-class Pair(Handler):
+class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         event_loop: EventLoop,
@@ -121,7 +106,7 @@ class Pair(Handler):
         self._peer_addr: Optional[SocketAddress] = None
         # TODO find a proper way to generate the address
         self._self_addr = address
-        # self._self_addr = address.addr
+        self.sock: Optional[socket.socket] = None
 
         # We need mutex since the handle called in the event loop is
         # running in a seperate thread.
@@ -175,7 +160,7 @@ class Pair(Handler):
             self.changeState(PairState.LISTENING)
             self._event_loop.register(self.sock, selectors.EVENT_READ, self)
 
-        logger.debug(f"{self.self_rank}: finished listening register")
+        logger.debug("finished listening register")
 
     def connect(self, addr: SocketAddress):
         """Actively connect to the port.
@@ -187,12 +172,15 @@ class Pair(Handler):
         with self._mutex:
             if self.self_rank == self.peer_rank:
                 raise ValueError("Should not connect to self")
-            elif self.self_rank < self.peer_rank:
+
+            if self.self_rank < self.peer_rank:
                 # Self is listening side
                 # logger.debug(f"{self.self_rank}: waitUntilConnected ")
                 self.waitUntilConnected(timeout=None)
-                logger.debug(f"{self.self_rank}: waitUntilConnected done")
+                logger.debug("waitUntilConnected done")
             else:
+                if self.sock is None:
+                    raise RuntimeError("The sock in pair is not created.")
                 # Self is connecting side.
                 self._event_loop.unregister(self.sock)
                 self._peer_addr = addr
@@ -223,7 +211,7 @@ class Pair(Handler):
 
                 self.waitUntilConnected(timeout=None)
 
-        logger.debug(f"{self.self_rank}: connect func done")
+        logger.debug("connect func done")
 
     def waitUntilConnected(self, timeout=None):
         def pred():
@@ -292,13 +280,13 @@ class Pair(Handler):
                 self.handleConnected(event)
             else:
                 logger.warning(
-                    f"unexpected PairState: {self.state} when handling the event"
+                    "unexpected PairState: %s when handling the event", self.state
                 )
-            logger.debug(
-                f"{self.self_rank}: Done handle event {event} with State {self.state}"
-            )
+            logger.debug("Done handle event %s with State %s", event, self.state)
 
     def handleListening(self, event: int):
+        if self.sock is None:
+            raise RuntimeError("The sock in pair is not created.")
         conn, addr = self.sock.accept()
         self._peer_addr = addr
 
@@ -309,6 +297,8 @@ class Pair(Handler):
         self._finishConnected()
 
     def handleConnecting(self, event: int):
+        if self.sock is None:
+            raise RuntimeError("The sock in pair is not created.")
         # This function is triggered when the remote listening sock accept.
         # we wait util it is connected.
         # So we just check there is no error.
@@ -347,7 +337,9 @@ class Pair(Handler):
             envolope = self._pending_send.popleft()
             self._write(envolope)
 
-    def _read(self, envelope: Envelope):
+    def _read(self, envelope: Envelope):  # pylint: disable=too-many-branches
+        if self.sock is None:
+            raise RuntimeError("The sock in pair is not created.")
         # TODO: make a queue to send the message seperately
         recv = 0  # number of bytes received
         header = None
@@ -381,7 +373,7 @@ class Pair(Handler):
 
             except BlockingIOError as e:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
-                # logger.warning(e)
+                logger.debug("_read encountered %s", e)
                 if self.state == PairState.CLOSED:
                     break
             else:
@@ -407,6 +399,8 @@ class Pair(Handler):
         envelope.buf.handleCompletion(envelope.handle)
 
     def _write(self, envelope: Envelope):
+        if self.sock is None:
+            raise RuntimeError("The sock in pair is not created.")
         header = _create_header(envelope.nbytes)
         end_pos = envelope.offset + envelope.nbytes
         sent = 0  # number of bytes sent
@@ -434,7 +428,9 @@ class Pair(Handler):
         logger.debug("handle write envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
 
-    def send(self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int):
+    def send(  # pylint: disable=too-many-arguments
+        self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int
+    ):
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
             if self.state != PairState.CONNECTED:
@@ -446,7 +442,9 @@ class Pair(Handler):
             envelope = Envelope(buf=buf, handle=handle, offset=offset, nbytes=nbytes)
             self._pending_send.append(envelope)
 
-    def recv(self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int):
+    def recv(  # pylint: disable=too-many-arguments
+        self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int
+    ):
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
             if self.state != PairState.CONNECTED:
