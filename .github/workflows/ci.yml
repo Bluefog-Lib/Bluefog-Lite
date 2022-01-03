@@ -29,7 +29,9 @@ jobs:
       with:
         python-version: '3.7'
     - name: Install pylint
-      run: cat tools/requirements_dev.txt | grep pylint | xargs pip install
+      run: cat tools/requirements_dev.txt | grep "pylint\|astroid" | xargs pip install
+    - name: Display version
+      run: tools/lint.sh --version
     - name: Format
       run: tools/lint.sh
 
