@@ -26,11 +26,13 @@ class EventStatusEnum(enum.Enum):
     ERROR = 3
 
 
-@dataclass
+@dataclass(frozen=True)
 class EventStatus:
     status: EventStatusEnum
     err: str
 
+
+DONE_EVENT = EventStatus(status=EventStatusEnum.DONE, err="")
 
 # This should be a singleton class
 class HandleManager:
@@ -69,9 +71,9 @@ class HandleManager:
                 handle, EventStatus(EventStatusEnum.UNKNOWN, "Not exist")
             )
 
-    def markDone(self, handle: int):
+    def markDone(self, handle: int, event_status: Optional[EventStatus] = None):
         with self.mutex:
-            self.status[handle] = EventStatus(EventStatusEnum.DONE, "")
+            self.status[handle] = event_status if event_status else DONE_EVENT
             self.cv.notify_all()
 
     def release(self, handle: int) -> EventStatus:

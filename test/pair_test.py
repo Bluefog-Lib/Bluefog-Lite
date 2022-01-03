@@ -95,7 +95,8 @@ def _build_sbuf_from_array(array):
     return SpecifiedBuffer(mock_context, array.data, array.nbytes)
 
 
-def test_send_recv_array(addr_list, array_list):
+@pytest.mark.parametrize("reverse_send_recv", [True, False])
+def test_send_recv_array(addr_list, array_list, reverse_send_recv):
     def send_recv_array(rank, size):
         event_loop = EventLoop()
         event_loop.run()
@@ -107,13 +108,14 @@ def test_send_recv_array(addr_list, array_list):
         )
         pair.connect(addr_list[1 - rank])
         hm = HandleManager.getInstance()
+        send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
 
-        if rank == 0:
+        if rank == send_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
             pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
             hm.wait(handle=handle)
-        elif rank == 1:
+        elif rank == recv_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[1])
             pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
@@ -128,7 +130,8 @@ def test_send_recv_array(addr_list, array_list):
         raise error
 
 
-def test_send_recv_obj(addr_list):
+@pytest.mark.parametrize("reverse_send_recv", [True, False])
+def test_send_recv_obj(addr_list, reverse_send_recv):
     def send_recv_obj(rank, size):
         event_loop = EventLoop()
         event_loop.run()
@@ -140,8 +143,9 @@ def test_send_recv_obj(addr_list):
         )
         pair.connect(addr_list[1 - rank])
         hm = HandleManager.getInstance()
-        data = b"jisdnoldf"
+        send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
 
+        data = b"jisdnoldf"
         if rank == 0:
             handle = hm.allocate()
             buf = SpecifiedBuffer(MagicMock(), memoryview(data), len(data))
@@ -162,8 +166,8 @@ def test_send_recv_obj(addr_list):
         raise error
 
 
-@pytest.mark.skip("BrokenPipeError: [Errno 32] Broken pipe?")
-def test_send_after_close(addr_list, array_list):
+@pytest.mark.parametrize("reverse_send_recv", [True, False])
+def test_send_after_close(addr_list, array_list, reverse_send_recv):
     def send_after_close(rank, size):
         event_loop = EventLoop()
         event_loop.run()
@@ -175,15 +179,16 @@ def test_send_after_close(addr_list, array_list):
         )
         pair.connect(addr_list[1 - rank])
         hm = HandleManager.getInstance()
+        send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
 
-        if rank == 0:
+        if rank == send_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
             time.sleep(0.5)  # wait to send
             pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
             hm.wait(handle=handle)
             pair.close()
-        elif rank == 1:
+        elif rank == recv_rank:
             # Close immediately
             pair.close()
 

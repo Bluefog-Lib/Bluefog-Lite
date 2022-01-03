@@ -24,6 +24,7 @@ from typing import Deque, Tuple, Optional
 
 from bluefoglite.common.tcp.buffer import Buffer
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
+from bluefoglite.common.handle_manager import EventStatus, EventStatusEnum
 from bluefoglite.common.logger import logger
 
 
@@ -302,7 +303,10 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         # This function is triggered when the remote listening sock accept.
         # we wait util it is connected.
         # So we just check there is no error.
-        assert self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR) == 0
+        if self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR) != 0:
+            logger.error("Get error when try to connect other side of pair.")
+            self.close()
+            return
 
         # change from the read | write to read only
         self._event_loop.unregister(self.sock)
@@ -376,6 +380,14 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 logger.debug("_read encountered %s", e)
                 if self.state == PairState.CLOSED:
                     break
+            except BrokenPipeError as e:
+                # Other side pair closed the socket.
+                logger.warning("Encounter BrokenPipeError when recv: %s", e)
+                self.close()
+                envelope.buf.handleCompletion(
+                    envelope.handle,
+                    EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
+                )
             else:
                 recv += num_bytes_recv  # type: ignore
 
@@ -423,6 +435,14 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             except BlockingIOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
+            except BrokenPipeError as e:
+                # Other side pair closed the socket.
+                logger.warning("Encounter BrokenPipeError when recv: %s", e)
+                self.close()
+                envelope.buf.handleCompletion(
+                    envelope.handle,
+                    EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
+                )
             else:
                 sent += num_bytes_sent
         logger.debug("handle write envelope done: %s", envelope)

@@ -16,9 +16,9 @@
 
 import abc
 import threading
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from bluefoglite.common.handle_manager import HandleManager
+from bluefoglite.common.handle_manager import HandleManager, EventStatus
 
 if TYPE_CHECKING:
     # pylint: disable=cyclic-import
@@ -38,8 +38,8 @@ class Buffer(abc.ABC):
         assert self.hm.wait(handle=handle, timeout=timeout)
         self.hm.release(handle=handle)
 
-    def handleCompletion(self, handle):
-        self.hm.markDone(handle)
+    def handleCompletion(self, handle: int, event_status: Optional[EventStatus] = None):
+        self.hm.markDone(handle, event_status)
 
     @abc.abstractmethod
     def irecv(
