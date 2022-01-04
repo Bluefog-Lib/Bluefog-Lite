@@ -18,12 +18,21 @@ import enum
 import threading
 from typing import Dict, Optional
 
+from bluefoglite.common.logger import logger
+
+
+class BlueFogLiteEventError(RuntimeError):
+    """Raised when the finished status of event is not DONE."""
+
+    pass
+
 
 class EventStatusEnum(enum.Enum):
     UNKNOWN = 0
     ALLOCATED = 1
     DONE = 2
     ERROR = 3
+    WARN = 4
 
 
 @dataclass(frozen=True)
@@ -85,6 +94,7 @@ class HandleManager:
             return (
                 self.status[handle].status == EventStatusEnum.DONE
                 or self.status[handle].status == EventStatusEnum.ERROR
+                or self.status[handle].status == EventStatusEnum.WARN
             )
 
         with self.mutex:
@@ -95,7 +105,13 @@ class HandleManager:
             return True
 
         if event_status.status == EventStatusEnum.ERROR:
-            raise RuntimeError(f"Encounter error: {event_status.err}")
+            raise BlueFogLiteEventError(f"Encounter error: {event_status.err}")
+
+        if event_status.status == EventStatusEnum.WARN:
+            logger.warn(
+                "When check the finished status event of encounted %s", event_status.err
+            )
+            return False
 
         return False
 

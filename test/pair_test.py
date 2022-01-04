@@ -19,12 +19,15 @@ import threading
 import time
 from unittest.mock import MagicMock
 
+import numpy as np  # type: ignore
+import pytest  # type: ignore
+
+from bluefoglite import BlueFogLiteEventError
+
 from bluefoglite.common.handle_manager import HandleManager
 from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketAddress
-import numpy as np  # type: ignore
-import pytest  # type: ignore
 
 
 def _multi_thread_help(size, fn, timeout=10):
@@ -186,9 +189,12 @@ def test_send_after_close(addr_list, array_list, reverse_send_recv):
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
             time.sleep(0.5)  # wait to send
-            with pytest.raises(RuntimeError, match="Broken pipe"):
+            try:
                 pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
                 hm.wait(handle=handle)
+            except BlueFogLiteEventError:
+                # Encounter error: [Errno 32] Broken pipe
+                pass
             pair.close()
         elif rank == recv_rank:
             # Close immediately

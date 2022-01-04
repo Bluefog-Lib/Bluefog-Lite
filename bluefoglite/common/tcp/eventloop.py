@@ -20,7 +20,6 @@ import threading
 from typing import Union
 
 from bluefoglite.common import const
-from bluefoglite.common.logger import logger
 
 
 class Handler(abc.ABC):
