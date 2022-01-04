@@ -19,6 +19,8 @@ import socket
 import threading
 from typing import Union
 
+from bluefoglite.common import const
+
 
 class Handler(abc.ABC):
     @abc.abstractmethod
@@ -52,7 +54,7 @@ class EventLoop:
             # self._cv.notify_all()
 
             # Find a better timeout choice? for closing the loop.
-            events_list = self.sel.select(2)  # timeout after 2 seconds
+            events_list = self.sel.select(const.EVENT_LOOP_TIMEOUT)
             for key, event in events_list:
                 # TODO Add error handling
 

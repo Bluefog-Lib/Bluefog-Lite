@@ -24,3 +24,4 @@ BLF_LOGGER = "BLF_LOGGER"
 
 # Constant
 BASE_PART = 18106  # Looks like 1BL[UEUF]OG
+EVENT_LOOP_TIMEOUT = 1  # Timeout param for event loop
