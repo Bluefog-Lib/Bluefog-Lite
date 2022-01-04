@@ -391,6 +391,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
                 )
+                return
             else:
                 recv += num_bytes_recv  # type: ignore
 
@@ -446,6 +447,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
                 )
+                return
             else:
                 sent += num_bytes_sent
         logger.debug("handle write envelope done: %s", envelope)
