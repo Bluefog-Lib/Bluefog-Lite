@@ -24,8 +24,6 @@ from bluefoglite.common.logger import logger
 class BlueFogLiteEventError(RuntimeError):
     """Raised when the finished status of event is not DONE."""
 
-    pass
-
 
 class EventStatusEnum(enum.Enum):
     UNKNOWN = 0
@@ -108,7 +106,7 @@ class HandleManager:
             raise BlueFogLiteEventError(f"Encounter error: {event_status.err}")
 
         if event_status.status == EventStatusEnum.WARN:
-            logger.warn(
+            logger.warning(
                 "When check the finished status event of encounted %s", event_status.err
             )
             return False

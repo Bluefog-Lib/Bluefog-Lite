@@ -1,1 +1,3 @@
-from bluefoglite.common.handle_manager import BlueFogLiteEventError
+from bluefoglite.common.handle_manager import (
+    BlueFogLiteEventError,  # pylint: disable=unused-import
+)
