@@ -283,7 +283,6 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 logger.warning(
                     "unexpected PairState: %s when handling the event", self.state
                 )
-            logger.debug("Done handle event %s with State %s", event, self.state)
 
     def handleListening(self, event: int):
         if self.sock is None:

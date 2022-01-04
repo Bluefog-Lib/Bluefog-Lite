@@ -16,14 +16,27 @@
 import logging
 import os
 
-global_rank = os.getenv("BFL_WORLD_RANK")
-logger = logging.getLogger("bluefog")
-logger.setLevel(logging.WARNING)
+from bluefoglite.common import const
+
+global_rank = os.getenv(const.BFL_WORLD_RANK)
+logger = logging.getLogger(const.BLF_LOGGER)
+levels = {
+    "critical": logging.CRITICAL,
+    "error": logging.ERROR,
+    "warn": logging.WARNING,
+    "warning": logging.WARNING,
+    "info": logging.INFO,
+    "debug": logging.DEBUG,
+}
+set_level = os.getenv(const.BLF_LOG_LEVEL)
+if set_level is None:
+    set_level = "warn"
+logger.setLevel(levels.get(set_level.lower(), '"warn"'))
 
 ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
+ch.setLevel(levels.get(set_level.lower(), '"warn"'))
 formatter = logging.Formatter(
-    f"R{global_rank}: %(asctime)-15s %(levelname)s  %(message)s"
+    f"R{global_rank}: %(asctime)-15s %(filename)s:%(lineno)d %(levelname)s  %(message)s"
 )
 ch.setFormatter(formatter)
 logger.addHandler(ch)

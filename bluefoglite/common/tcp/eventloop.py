@@ -55,13 +55,12 @@ class EventLoop:
             # Find a better timeout choice? for closing the loop.
             events_list = self.sel.select(2)  # timeout after 2 seconds
             for key, event in events_list:
-                event_ = "r" if event == 1 else "w" if event == 2 else "rw"
-                logger.debug("%s %s", event_, key.fileobj)
+                # TODO Add error handling
+
                 # key is the SelectorKey instance corresponding to a ready file object.
                 # SelectorKey is a namedtuple: (fileobj, fd, events, data)
                 # We force the data to be the instance of abstract class Handler.
                 key.data.handleEvent(event)
-        # print('end running loop')
 
     def register(self, fd: Union[int, socket.socket], event: int, handler: Handler):
         self.sel.register(fd, event, handler)

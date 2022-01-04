@@ -20,6 +20,7 @@ from typing import Any, Dict
 
 import numpy as np  # type: ignore
 
+from bluefoglite.common import const
 from bluefoglite.common.tcp.agent import Agent
 from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.store import FileStore
@@ -44,7 +45,9 @@ class BlueFogLiteGroup:
     def init(self, store=None):
         self._agent = Agent()
         self._agent.createContext(rank=self.rank(), size=self.size())
-        self._store = FileStore(os.getenv("BFL_FILE_STORE")) if store is None else store
+        self._store = (
+            FileStore(os.getenv(const.BFL_FILE_STORE)) if store is None else store
+        )
 
         self._agent.context.connectRing(store=self._store)
 
@@ -53,11 +56,11 @@ class BlueFogLiteGroup:
             self._agent.close()
 
     def rank(self):  # pylint: disable=no-self-use
-        rank = os.getenv("BFL_WORLD_RANK")
+        rank = os.getenv(const.BFL_WORLD_RANK)
         return int(rank) if rank else 0
 
     def size(self):  # pylint: disable=no-self-use
-        size = os.getenv("BFL_WORLD_SIZE")
+        size = os.getenv(const.BFL_WORLD_SIZE)
         return int(size) if size else 1
 
     def _check_rank(self, rank):

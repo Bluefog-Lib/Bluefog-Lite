@@ -20,8 +20,8 @@ from typing import Dict, Optional
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketAddress
 from bluefoglite.common.logger import logger
+from bluefoglite.common import const
 
-BASE_PART = 18106  # Looks like 1BL[UEUF]OG
 
 # One agent can contain multiple Contexts.
 # Each Context should represent entire communication group like  (comm in MPI)
@@ -39,7 +39,7 @@ class Agent:
         self, *, rank, size
     ) -> SocketAddress:
         return SocketAddress(
-            addr=("localhost", BASE_PART + rank * size),
+            addr=("localhost", const.BASE_PART + rank * size),
             sock_family=socket.AF_INET,
             sock_type=socket.SOCK_STREAM,
             sock_protocol=0,
