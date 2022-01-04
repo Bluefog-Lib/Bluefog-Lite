@@ -341,6 +341,10 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             envolope = self._pending_send.popleft()
             self._write(envolope)
 
+    # _read and _write are long complicated functions due the error handling.
+    # See here https://www.python.org/dev/peps/pep-3151/#new-exception-classes
+    # for the naming of error that possible thrown by socket in python.
+
     def _read(self, envelope: Envelope):  # pylint: disable=too-many-branches
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
@@ -352,7 +356,6 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         logger.debug("handle read envelope %s", envelope)
         while True:
-            # logger.error("Start to recieve")
             try:
                 # Should be ready to read
                 if recv < HEADER_LENGTH:
@@ -380,9 +383,9 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 logger.debug("_read encountered %s", e)
                 if self.state == PairState.CLOSED:
                     break
-            except BrokenPipeError as e:
+            except ConnectionError as e:
                 # Other side pair closed the socket.
-                logger.warning("Encounter BrokenPipeError when recv: %s", e)
+                logger.warning("Encountered when recv: %s", e)
                 self.close()
                 envelope.buf.handleCompletion(
                     envelope.handle,
@@ -435,9 +438,9 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             except BlockingIOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
-            except BrokenPipeError as e:
+            except ConnectionError as e:
                 # Other side pair closed the socket.
-                logger.warning("Encounter BrokenPipeError when recv: %s", e)
+                logger.warning("Encountered when recv: %s", e)
                 self.close()
                 envelope.buf.handleCompletion(
                     envelope.handle,
