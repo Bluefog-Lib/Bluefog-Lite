@@ -70,9 +70,9 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
         python -m pip install -e .
+        cat tools/requirements_dev.txt | grep pytest | xargs pip install
     - name: Unit Test
       run: |
-        python -m pip install pytest
         timeout 5m pytest -s -vv test
 
   macos-unit-test:
@@ -93,7 +93,7 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install -r requirements.txt
         python -m pip install -e .
+        cat tools/requirements_dev.txt | grep pytest | xargs pip install
     - name: Unit Test
       run: |
-        python -m pip install pytest
         pytest -s -vv test
