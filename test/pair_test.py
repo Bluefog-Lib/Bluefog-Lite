@@ -166,8 +166,8 @@ def test_send_recv_obj(addr_list, reverse_send_recv):
         raise error
 
 
-@pytest.mark.skip("still cannot handle the socket close properly")
-@pytest.mark.parametrize("reverse_send_recv", [True, False])
+# @pytest.mark.skip("still cannot handle the socket close properly")
+@pytest.mark.parametrize("reverse_send_recv", [False])
 def test_send_after_close(addr_list, array_list, reverse_send_recv):
     def send_after_close(rank, size):
         event_loop = EventLoop()
@@ -186,8 +186,9 @@ def test_send_after_close(addr_list, array_list, reverse_send_recv):
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
             time.sleep(0.5)  # wait to send
-            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
-            hm.wait(handle=handle)
+            with pytest.raises(RuntimeError, match="Broken pipe"):
+                pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+                hm.wait(handle=handle)
             pair.close()
         elif rank == recv_rank:
             # Close immediately

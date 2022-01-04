@@ -20,6 +20,7 @@ import threading
 from typing import Union
 
 from bluefoglite.common import const
+from bluefoglite.common.logger import logger
 
 
 class Handler(abc.ABC):
@@ -57,7 +58,6 @@ class EventLoop:
             events_list = self.sel.select(const.EVENT_LOOP_TIMEOUT)
             for key, event in events_list:
                 # TODO Add error handling
-
                 # key is the SelectorKey instance corresponding to a ready file object.
                 # SelectorKey is a namedtuple: (fileobj, fd, events, data)
                 # We force the data to be the instance of abstract class Handler.

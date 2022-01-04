@@ -384,12 +384,17 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     break
             except ConnectionError as e:
                 # Other side pair closed the socket.
-                logger.warning("Encountered when recv: %s", e)
-                self.close()
+                logger.warning(
+                    "Encountered when recv: %s. Likely, the other "
+                    "side of socket closed connection.",
+                    e,
+                )
                 envelope.buf.handleCompletion(
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
                 )
+                self._mutex.release()
+                self.close()
                 return
             else:
                 recv += num_bytes_recv  # type: ignore
@@ -440,12 +445,17 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 pass
             except ConnectionError as e:
                 # Other side pair closed the socket.
-                logger.warning("Encountered when recv: %s", e)
-                self.close()
+                logger.warning(
+                    "Encountered when recv: %s. Likely, the other "
+                    "side of socket closed connection.",
+                    e,
+                )
                 envelope.buf.handleCompletion(
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
                 )
+                self._mutex.release()
+                self.close()
                 return
             else:
                 sent += num_bytes_sent
