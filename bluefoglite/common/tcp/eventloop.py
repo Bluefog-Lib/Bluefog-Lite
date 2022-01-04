@@ -18,7 +18,6 @@ import selectors
 import socket
 import threading
 from typing import Union
-from bluefoglite.common.logger import logger
 
 
 class Handler(abc.ABC):
