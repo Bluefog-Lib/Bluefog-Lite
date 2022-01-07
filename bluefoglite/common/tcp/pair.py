@@ -28,14 +28,19 @@ from bluefoglite.common.handle_manager import EventStatus, EventStatusEnum
 from bluefoglite.common.logger import logger
 
 
+# Socket related constant nomenclature follows:
+# AddressFamily startswith 'AF_'
+# SocketKind startswith 'SOCK_'
+# MsgFlag startswith 'MSG_'
+# AddressInfo startswith 'AI_'
+# Protocol startswith 'IPPROTO_'
+def _get_socket_constants(prefix):
+    """Create a dictionary mapping socket module constants to their names."""
+    return {getattr(socket, n): n for n in dir(socket) if n.startswith(prefix)}
+
+
 @dataclasses.dataclass
 class SocketAddress:
-    # Socket related constant nomenclature follows:
-    # AddressFamily startswith 'AF_'
-    # SocketKind startswith 'SOCK_'
-    # MsgFlag startswith 'MSG_'
-    # AddressInfo startswith 'AI_'
-
     # A typical (HOST, PORT) structure for IPv4 address.
     # TODO make it as general address
     addr: Tuple[str, int]
@@ -43,7 +48,7 @@ class SocketAddress:
     # Used for create the socket(family, type, protocol)
     sock_family: int = socket.AF_INET
     sock_type: int = socket.SOCK_STREAM
-    sock_protocol: int = 0
+    sock_protocol: int = socket.IPPROTO_IP
 
 
 # Fix length-header
