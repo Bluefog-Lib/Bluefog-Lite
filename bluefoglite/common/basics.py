@@ -16,6 +16,7 @@
 import io
 import json
 import os
+import pickle
 from typing import Any, Dict
 
 import numpy as np  # type: ignore
@@ -78,7 +79,7 @@ class BlueFogLiteGroup:
                 self._agent.context, obj_or_array.data, obj_or_array.nbytes
             )
         else:
-            message = _json_encode(obj_or_array, "utf-8")
+            message = pickle.dumps(obj_or_array)
             buf = SpecifiedBuffer(
                 self._agent.context, memoryview(message), len(message)
             )
@@ -100,5 +101,5 @@ class BlueFogLiteGroup:
 
         ubuf = UnspecifiedBuffer(self._agent.context)
         ubuf.recv(src)
-        obj = _json_decode(ubuf.data, "utf-8")
+        obj = pickle.loads(ubuf.data)
         return obj
