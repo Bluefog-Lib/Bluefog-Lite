@@ -18,10 +18,8 @@ import socket
 from typing import Dict, Optional
 
 from bluefoglite.common.tcp.eventloop import EventLoop
-from bluefoglite.common.tcp.pair import Pair, SocketAddress
+from bluefoglite.common.tcp.pair import Pair, SocketAddress, TAddress
 from bluefoglite.common.logger import logger
-from bluefoglite.common import const
-
 
 # One agent can contain multiple Contexts.
 # Each Context should represent entire communication group like  (comm in MPI)
@@ -31,22 +29,24 @@ class Agent:
     def __init__(self, address: Optional[SocketAddress] = None):
         # One event loop process the events of all socket pairs
         self.event_loop: EventLoop = EventLoop()
-        self.context = None
+        self.context: Optional[AgentContext] = None
 
         self.event_loop.run()
 
     def createAgentAddress(  # pylint: disable=no-self-use
-        self, *, rank, size
+        self, *, addr: Optional[TAddress] = None
     ) -> SocketAddress:
+        if addr is None:
+            addr = ("localhost", 0)  # let the OS to pick a random free address
         return SocketAddress(
-            addr=("localhost", const.BASE_PART + rank * size),
+            addr=addr,
             sock_family=socket.AF_INET,
             sock_type=socket.SOCK_STREAM,
-            sock_protocol=0,
+            sock_protocol=socket.IPPROTO_IP,
         )
 
-    def createContext(self, *, rank, size):
-        address = self.createAgentAddress(rank=rank, size=size)
+    def createContext(self, *, rank: int, size: int, addr: Optional[TAddress] = None):
+        address = self.createAgentAddress(addr=addr)
         self.context = AgentContext(
             event_loop=self.event_loop, rank=rank, size=size, address=address
         )

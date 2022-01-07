@@ -55,16 +55,30 @@ def _multi_thread_help(size, fn, timeout=10):
 
 
 @pytest.fixture
-def addr_list():
-    return [
-        SocketAddress(
-            addr=("localhost", 18106 + i),
-            sock_family=socket.AF_INET,
-            sock_type=socket.SOCK_STREAM,
-            sock_protocol=0,
-        )
-        for i in range(2)
-    ]
+def addr_list(num=2):
+    base_port = 18106
+    while base_port < 2 ** 16:
+        potential_address = [
+            SocketAddress(
+                addr=("localhost", base_port + i),
+                sock_family=socket.AF_INET,
+                sock_type=socket.SOCK_STREAM,
+                sock_protocol=0,
+            )
+            for i in range(num)
+        ]
+        # Make sure the above ports are available. If not
+        # try a new base port.
+        try:
+            for address in potential_address:
+                sock = socket.socket(address.sock_family, address.sock_type)
+                sock.bind(address.addr)
+                sock.close()
+        except OSError:
+            base_port += num
+            continue
+        break
+    return potential_address
 
 
 @pytest.fixture
@@ -169,7 +183,6 @@ def test_send_recv_obj(addr_list, reverse_send_recv):
         raise error
 
 
-# @pytest.mark.skip("still cannot handle the socket close properly")
 @pytest.mark.parametrize("reverse_send_recv", [False])
 def test_send_after_close(addr_list, array_list, reverse_send_recv):
     def send_after_close(rank, size):

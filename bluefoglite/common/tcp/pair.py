@@ -20,13 +20,16 @@ import selectors
 import socket
 import struct
 import threading
-from typing import Deque, Tuple, Optional
+from typing import Any, Deque, Tuple, Optional, Union
 
 from bluefoglite.common.tcp.buffer import Buffer
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
 from bluefoglite.common.handle_manager import EventStatus, EventStatusEnum
 from bluefoglite.common.logger import logger
 
+# Addresses can be either tuples of varying lengths (AF_INET, AF_INET6,
+# AF_NETLINK, AF_TIPC) or strings (AF_UNIX).
+TAddress = Union[Tuple[Any, ...], str]
 
 # Socket related constant nomenclature follows:
 # AddressFamily startswith 'AF_'
@@ -41,9 +44,8 @@ def _get_socket_constants(prefix):
 
 @dataclasses.dataclass
 class SocketAddress:
-    # A typical (HOST, PORT) structure for IPv4 address.
-    # TODO make it as general address
-    addr: Tuple[str, int]
+    # For IPv4 address, it is (HOST, PORT).
+    addr: TAddress
 
     # Used for create the socket(family, type, protocol)
     sock_family: int = socket.AF_INET
@@ -110,8 +112,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self._event_loop = event_loop
         self._state = PairState.INITIALIZING
         self._peer_addr: Optional[SocketAddress] = None
-        # TODO find a proper way to generate the address
-        self._self_addr = address
+        self._self_addr: SocketAddress = address
         self.sock: Optional[socket.socket] = None
 
         # We need mutex since the handle called in the event loop is
@@ -162,6 +163,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             self.sock.listen(1)
 
             self.sock.setblocking(False)
+            # It is important to overwrite it since the bind addr can choose port 0.
+            self._self_addr.addr = self.sock.getsockname()
 
             self.changeState(PairState.LISTENING)
             self._event_loop.register(self.sock, selectors.EVENT_READ, self)
@@ -179,6 +182,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             if self.self_rank == self.peer_rank:
                 raise ValueError("Should not connect to self")
 
+            self._peer_addr = addr
             if self.self_rank < self.peer_rank:
                 # Self is listening side
                 # logger.debug(f"{self.self_rank}: waitUntilConnected ")
@@ -189,7 +193,6 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     raise RuntimeError("The sock in pair is not created.")
                 # Self is connecting side.
                 self._event_loop.unregister(self.sock)
-                self._peer_addr = addr
                 self.sock.close()
 
                 # Recreate a new socket for connecting
@@ -210,6 +213,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 # connection is in progress.
                 self.sock.setblocking(False)
                 self.sock.connect_ex(self._peer_addr.addr)
+
                 self.changeState(PairState.CONNECTING)
                 self._event_loop.register(
                     self.sock, selectors.EVENT_READ | selectors.EVENT_WRITE, self
@@ -264,6 +268,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         """Triggered by the selector. Note it is called under a different thread."""
         with self._mutex:
             if self.state == PairState.CLOSED:
+                # TODO: 1. properly handle it 2. when closing the pair, cleanup the
+                # the events.
                 logger.warning("Handle the event when the pair is already closed")
                 return
 
@@ -292,13 +298,17 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     def handleListening(self, event: int):
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
-        conn, addr = self.sock.accept()
-        self._peer_addr = addr
-
+        conn, _ = self.sock.accept()
         self._event_loop.unregister(self.sock)
 
         # Note we change the listening socket to the connected sock
         self.sock = conn
+        if not self._peer_addr:
+            raise RuntimeError(
+                "Handle socket listening without proper peer addr setup."
+            )
+        self._peer_addr.addr = self.sock.getpeername()
+        self._self_addr.addr = self.sock.getsockname()
         self._finishConnected()
 
     def handleConnecting(self, event: int):
