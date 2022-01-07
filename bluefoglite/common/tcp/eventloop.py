@@ -50,6 +50,7 @@ class EventLoop:
         self.running_thread.start()
 
     def _run(self):
+        # TODO add error handling in this function
         while not self.done:
             # self._cv.notify_all()
 
