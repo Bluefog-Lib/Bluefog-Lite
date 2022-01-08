@@ -244,11 +244,17 @@ def test_close_before_send_finish(
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
             pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.close()
             # Close it withour wait sending.
             with caplog.at_level(logging.WARNING):
-                pair.close()
+                hm.wait(handle=handle)
+
             assert len(caplog.record_tuples) == 1
             assert caplog.record_tuples[0][:2] == ("BLF_LOGGER", logging.WARNING)
+            assert (
+                "Unfinished send/recv after pair is closed"
+                in caplog.record_tuples[0][2]
+            )
         elif rank == recv_rank:
             time.sleep(0.1)
             pair.close()
@@ -285,11 +291,17 @@ def test_close_before_recv_finish(
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
             pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.close()
             # Close it without wait receiving.
             with caplog.at_level(logging.WARNING):
-                pair.close()
+                hm.wait(handle=handle)
+
             assert len(caplog.record_tuples) == 1
             assert caplog.record_tuples[0][:2] == ("BLF_LOGGER", logging.WARNING)
+            assert (
+                "Unfinished send/recv after pair is closed"
+                in caplog.record_tuples[0][2]
+            )
 
         event_loop.close()
 
