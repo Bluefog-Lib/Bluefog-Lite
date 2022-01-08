@@ -424,7 +424,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
                 )
                 self.changeState(PairState.CLOSED)
-                
+
                 return
             else:
                 recv += num_bytes_recv  # type: ignore
