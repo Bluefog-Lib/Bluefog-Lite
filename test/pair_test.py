@@ -27,7 +27,7 @@ from bluefoglite import BlueFogLiteEventError
 from bluefoglite.common.handle_manager import HandleManager
 from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.tcp.eventloop import EventLoop
-from bluefoglite.common.tcp.pair import Pair, SocketAddress
+from bluefoglite.common.tcp.pair import Pair, SocketFullAddress
 
 
 def _multi_thread_help(size, fn, timeout=10):
@@ -55,11 +55,11 @@ def _multi_thread_help(size, fn, timeout=10):
 
 
 @pytest.fixture
-def addr_list(num=2):
+def full_addr_list(num=2):
     base_port = 18106
     while base_port < 2 ** 16:
-        potential_address = [
-            SocketAddress(
+        full_address_list = [
+            SocketFullAddress(
                 addr=("localhost", base_port + i),
                 sock_family=socket.AF_INET,
                 sock_type=socket.SOCK_STREAM,
@@ -70,7 +70,7 @@ def addr_list(num=2):
         # Make sure the above ports are available. If not
         # try a new base port.
         try:
-            for address in potential_address:
+            for address in full_address_list:
                 sock = socket.socket(address.sock_family, address.sock_type)
                 sock.bind(address.addr)
                 sock.close()
@@ -78,7 +78,7 @@ def addr_list(num=2):
             base_port += num
             continue
         break
-    return potential_address
+    return full_address_list
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ def array_list():
     return [np.arange(n), np.zeros((n,)).astype(int)]
 
 
-def test_connect(addr_list):
+def test_connect(full_addr_list):
     def listen_connect_close(rank, size):
         event_loop = EventLoop()
         event_loop.run()
@@ -95,9 +95,9 @@ def test_connect(addr_list):
             event_loop=event_loop,
             self_rank=rank,
             peer_rank=1 - rank,
-            address=addr_list[rank],
+            full_address=full_addr_list[rank],
         )
-        pair.connect(addr_list[1 - rank])
+        pair.connect(full_addr_list[1 - rank])
         pair.close()
         event_loop.close()
 
@@ -113,7 +113,7 @@ def _build_sbuf_from_array(array):
 
 
 @pytest.mark.parametrize("reverse_send_recv", [True, False])
-def test_send_recv_array(addr_list, array_list, reverse_send_recv):
+def test_send_recv_array(full_addr_list, array_list, reverse_send_recv):
     def send_recv_array(rank, size):
         event_loop = EventLoop()
         event_loop.run()
@@ -121,9 +121,9 @@ def test_send_recv_array(addr_list, array_list, reverse_send_recv):
             event_loop=event_loop,
             self_rank=rank,
             peer_rank=1 - rank,
-            address=addr_list[rank],
+            full_address=full_addr_list[rank],
         )
-        pair.connect(addr_list[1 - rank])
+        pair.connect(full_addr_list[1 - rank])
         hm = HandleManager.getInstance()
         send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
 
@@ -148,7 +148,7 @@ def test_send_recv_array(addr_list, array_list, reverse_send_recv):
 
 
 @pytest.mark.parametrize("reverse_send_recv", [True, False])
-def test_send_recv_obj(addr_list, reverse_send_recv):
+def test_send_recv_obj(full_addr_list, reverse_send_recv):
     def send_recv_obj(rank, size):
         event_loop = EventLoop()
         event_loop.run()
@@ -156,9 +156,9 @@ def test_send_recv_obj(addr_list, reverse_send_recv):
             event_loop=event_loop,
             self_rank=rank,
             peer_rank=1 - rank,
-            address=addr_list[rank],
+            full_address=full_addr_list[rank],
         )
-        pair.connect(addr_list[1 - rank])
+        pair.connect(full_addr_list[1 - rank])
         hm = HandleManager.getInstance()
         send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
 
@@ -184,7 +184,7 @@ def test_send_recv_obj(addr_list, reverse_send_recv):
 
 
 @pytest.mark.parametrize("reverse_send_recv", [False])
-def test_send_after_close(addr_list, array_list, reverse_send_recv):
+def test_send_after_close(full_addr_list, array_list, reverse_send_recv):
     def send_after_close(rank, size):
         event_loop = EventLoop()
         event_loop.run()
@@ -192,9 +192,9 @@ def test_send_after_close(addr_list, array_list, reverse_send_recv):
             event_loop=event_loop,
             self_rank=rank,
             peer_rank=1 - rank,
-            address=addr_list[rank],
+            full_address=full_addr_list[rank],
         )
-        pair.connect(addr_list[1 - rank])
+        pair.connect(full_addr_list[1 - rank])
         hm = HandleManager.getInstance()
         send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
 

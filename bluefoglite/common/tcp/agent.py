@@ -18,7 +18,7 @@ import socket
 from typing import Dict, Optional
 
 from bluefoglite.common.tcp.eventloop import EventLoop
-from bluefoglite.common.tcp.pair import Pair, SocketAddress, TAddress
+from bluefoglite.common.tcp.pair import Pair, SocketFullAddress, TAddress
 from bluefoglite.common.logger import logger
 
 # One agent can contain multiple Contexts.
@@ -26,7 +26,7 @@ from bluefoglite.common.logger import logger
 # In each Context, it contains multiple Pairs, i.e. socket pair, talking to other neighbor.
 # Op `send` and `recv`` should be attached to a fixed memory buffer.
 class Agent:
-    def __init__(self, address: Optional[SocketAddress] = None):
+    def __init__(self, address: Optional[SocketFullAddress] = None):
         # One event loop process the events of all socket pairs
         self.event_loop: EventLoop = EventLoop()
         self.context: Optional[AgentContext] = None
@@ -35,10 +35,10 @@ class Agent:
 
     def createAgentAddress(  # pylint: disable=no-self-use
         self, *, addr: Optional[TAddress] = None
-    ) -> SocketAddress:
+    ) -> SocketFullAddress:
         if addr is None:
             addr = ("localhost", 0)  # let the OS to pick a random free address
-        return SocketAddress(
+        return SocketFullAddress(
             addr=addr,
             sock_family=socket.AF_INET,
             sock_type=socket.SOCK_STREAM,
@@ -46,9 +46,9 @@ class Agent:
         )
 
     def createContext(self, *, rank: int, size: int, addr: Optional[TAddress] = None):
-        address = self.createAgentAddress(addr=addr)
+        full_address = self.createAgentAddress(addr=addr)
         self.context = AgentContext(
-            event_loop=self.event_loop, rank=rank, size=size, address=address
+            event_loop=self.event_loop, rank=rank, size=size, full_address=full_address
         )
 
     def close(self):
@@ -59,11 +59,16 @@ class Agent:
 
 class AgentContext:
     def __init__(
-        self, *, event_loop: EventLoop, rank: int, size: int, address: SocketAddress
+        self,
+        *,
+        event_loop: EventLoop,
+        rank: int,
+        size: int,
+        full_address: SocketFullAddress,
     ):
         self.rank = rank
         self.size = size
-        self.address = address
+        self.full_address = full_address
         self.pairs: Dict[int, "Pair"] = {}
         self._event_loop = event_loop
 
@@ -73,13 +78,16 @@ class AgentContext:
         return self.pairs[peer_rank]
 
     def createPair(self, peer_rank):
-        pair_address = self.address
-        pair_address.addr = (pair_address.addr[0], pair_address.addr[1] + peer_rank)
+        pair_full_address = self.full_address
+        pair_full_address.addr = (
+            pair_full_address.addr[0],
+            pair_full_address.addr[1] + peer_rank,
+        )
         pair = Pair(
             event_loop=self._event_loop,
             self_rank=self.rank,
             peer_rank=peer_rank,
-            address=pair_address,
+            full_address=pair_full_address,
         )
         self.pairs[peer_rank] = pair
         return pair

@@ -43,7 +43,7 @@ def _get_socket_constants(prefix):
 
 
 @dataclasses.dataclass
-class SocketAddress:
+class SocketFullAddress:
     # For IPv4 address, it is (HOST, PORT).
     addr: TAddress
 
@@ -107,12 +107,12 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         event_loop: EventLoop,
         self_rank: int,
         peer_rank: int,
-        address: SocketAddress,
+        full_address: SocketFullAddress,
     ):
         self._event_loop = event_loop
         self._state = PairState.INITIALIZING
-        self._peer_addr: Optional[SocketAddress] = None
-        self._self_addr: SocketAddress = address
+        self._peer_full_addr: Optional[SocketFullAddress] = None
+        self._self_full_addr: SocketFullAddress = full_address
         self.sock: Optional[socket.socket] = None
 
         # We need mutex since the handle called in the event loop is
@@ -134,11 +134,11 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
     @property
     def self_address(self):
-        return self._self_addr
+        return self._self_full_addr
 
     @property
     def peer_address(self):
-        return self._peer_addr
+        return self._peer_full_addr
 
     @property
     def fd(self):
@@ -152,26 +152,26 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         """Listen in the port and register handle to selector."""
         with self._mutex:
             self.sock = socket.socket(
-                family=self._self_addr.sock_family,
-                type=self._self_addr.sock_type,
-                proto=self._self_addr.sock_protocol,
+                family=self._self_full_addr.sock_family,
+                type=self._self_full_addr.sock_type,
+                proto=self._self_full_addr.sock_protocol,
             )
             # Set SO_REUSEADDR to allow that reuse of the listening port
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.sock.bind(self._self_addr.addr)
+            self.sock.bind(self._self_full_addr.addr)
             # backlog: queue up as many as 1 connect request
             self.sock.listen(1)
 
             self.sock.setblocking(False)
             # It is important to overwrite it since the bind addr can choose port 0.
-            self._self_addr.addr = self.sock.getsockname()
+            self._self_full_addr.addr = self.sock.getsockname()
 
             self.changeState(PairState.LISTENING)
             self._event_loop.register(self.sock, selectors.EVENT_READ, self)
 
         logger.debug("finished listening register")
 
-    def connect(self, addr: SocketAddress):
+    def connect(self, addr: SocketFullAddress):
         """Actively connect to the port.
 
         Note pair (i, j) both create the listening function in the selector.
@@ -182,7 +182,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             if self.self_rank == self.peer_rank:
                 raise ValueError("Should not connect to self")
 
-            self._peer_addr = addr
+            self._peer_full_addr = addr
             if self.self_rank < self.peer_rank:
                 # Self is listening side
                 # logger.debug(f"{self.self_rank}: waitUntilConnected ")
@@ -197,9 +197,9 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
                 # Recreate a new socket for connecting
                 self.sock = socket.socket(
-                    family=self._self_addr.sock_family,
-                    type=self._self_addr.sock_type,
-                    proto=self._self_addr.sock_protocol,
+                    family=self._self_full_addr.sock_family,
+                    type=self._self_full_addr.sock_type,
+                    proto=self._self_full_addr.sock_protocol,
                 )
                 # Set SO_REUSEADDR to allow that reuse of the listening port
                 self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -212,7 +212,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 # indicator, errno.EINPROGRESS, instead of raising an exception while the
                 # connection is in progress.
                 self.sock.setblocking(False)
-                self.sock.connect_ex(self._peer_addr.addr)
+                self.sock.connect_ex(self._peer_full_addr.addr)
 
                 self.changeState(PairState.CONNECTING)
                 self._event_loop.register(
@@ -303,12 +303,12 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         # Note we change the listening socket to the connected sock
         self.sock = conn
-        if not self._peer_addr:
+        if not self._peer_full_addr:
             raise RuntimeError(
                 "Handle socket listening without proper peer addr setup."
             )
-        self._peer_addr.addr = self.sock.getpeername()
-        self._self_addr.addr = self.sock.getsockname()
+        self._peer_full_addr.addr = self.sock.getpeername()
+        self._self_full_addr.addr = self.sock.getsockname()
         self._finishConnected()
 
     def handleConnecting(self, event: int):
@@ -334,8 +334,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
     def _finishConnected(self):
         # Reset the self and peer addr
-        self._self_addr = self.sock.getsockname()
-        self._peer_addr = self.sock.getpeername()
+        self._self_full_addr = self.sock.getsockname()
+        self._peer_full_addr = self.sock.getpeername()
         self.sock.setblocking(False)
         # We only need read since we actively send out information
         self._event_loop.register(
