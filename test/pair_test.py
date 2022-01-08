@@ -184,7 +184,7 @@ def test_send_recv_obj(full_addr_list, reverse_send_recv):
         raise error
 
 
-@pytest.mark.parametrize("reverse_send_recv", [False])
+@pytest.mark.parametrize("reverse_send_recv", [True, False])
 def test_send_after_peer_close(full_addr_list, array_list, reverse_send_recv):
     def send_after_peer_close(rank, size):
         event_loop = EventLoop()
@@ -222,7 +222,7 @@ def test_send_after_peer_close(full_addr_list, array_list, reverse_send_recv):
         raise error
 
 
-@pytest.mark.parametrize("reverse_send_recv", [False])
+@pytest.mark.parametrize("reverse_send_recv", [True, False])
 def test_close_before_send_finish(
     full_addr_list, array_list, reverse_send_recv, caplog
 ):
@@ -267,7 +267,7 @@ def test_close_before_send_finish(
         raise error
 
 
-@pytest.mark.parametrize("reverse_send_recv", [False])
+@pytest.mark.parametrize("reverse_send_recv", [True, False])
 def test_close_before_recv_finish(
     full_addr_list, array_list, reverse_send_recv, caplog
 ):

@@ -34,6 +34,7 @@ class EventLoop:
         self.sel = selectors.DefaultSelector()
         self.done = False  # Python assignment to simple variable is "atomic"
         self.running_thread = None
+        self.closed = False
 
         self._cv = threading.Condition()
         self.error: Optional[Exception] = None
@@ -86,9 +87,12 @@ class EventLoop:
         # self._cv.release()
 
     def close(self):
+        if self.closed:
+            return
         self.done = True
         self.running_thread.join()
         self.sel.close()
+        self.closed = True
 
         if self.error:
             raise self.error

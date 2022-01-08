@@ -236,8 +236,6 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
     def close(self):
         with self._mutex:
-            if self.state == PairState.CLOSED:
-                return
             # if self.self_rank < self.peer_rank:
             #     # this is the server side, do nothing but wait the peer close
             #     # then trigger the read event.
@@ -285,7 +283,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             if self.state == PairState.CLOSED:
                 # TODO: 1. properly handle it 2. when closing the pair, cleanup the
                 # the events.
-                logger.warning("Handle the event when the pair is already closed")
+                logger.info("Handle the event when the pair is already closed")
                 return
 
             if self.state == PairState.LISTENING:
@@ -343,8 +341,10 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
     def handleConnected(self, event: int):
         if event & selectors.EVENT_READ:
+            # logger.error("%d, Triggered read", self.self_rank)
             self.read()
         if event & selectors.EVENT_WRITE:
+            # logger.error("%d, Triggered write", self.self_rank)
             self.write()
 
     def _finishConnected(self):
@@ -423,8 +423,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
                 )
-                self._mutex.release()
-                self.close()
+                self.changeState(PairState.CLOSED)
+                
                 return
             else:
                 recv += num_bytes_recv  # type: ignore
@@ -484,8 +484,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
                 )
-                self._mutex.release()
-                self.close()
+                self.changeState(PairState.CLOSED)
                 return
             else:
                 sent += num_bytes_sent
