@@ -78,12 +78,15 @@ class HandleManager:
                 handle, EventStatus(EventStatusEnum.UNKNOWN, "Not exist")
             )
 
-    def markDone(self, handle: int, event_status: Optional[EventStatus] = None) -> bool:
+    def markDone(self, handle: int, event_status: Optional[EventStatus] = None):
+        """Change the status of event to some finished status.
+
+        Note this function is called in the event_loop thread. It should not raise
+        the error typically
+        """
         with self.mutex:
             self.status[handle] = event_status if event_status else DONE_EVENT
             self.cv.notify_all()
-
-            return self.postProcess(handle)
 
     def release(self, handle: int) -> EventStatus:
         with self.mutex:

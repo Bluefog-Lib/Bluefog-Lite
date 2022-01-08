@@ -80,7 +80,7 @@ class EventLoop:
 
     def unregister(self, fd: Union[int, socket.socket]):
         self.sel.unregister(fd)
-        # # make sure `unregister` returned after the loop ticked.
+        # make sure `unregister` returned after the loop ticked?
         # self._cv.acquire()
         # self._cv.wait()
         # self._cv.release()
