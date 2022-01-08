@@ -78,10 +78,12 @@ class HandleManager:
                 handle, EventStatus(EventStatusEnum.UNKNOWN, "Not exist")
             )
 
-    def markDone(self, handle: int, event_status: Optional[EventStatus] = None):
+    def markDone(self, handle: int, event_status: Optional[EventStatus] = None) -> bool:
         with self.mutex:
             self.status[handle] = event_status if event_status else DONE_EVENT
             self.cv.notify_all()
+
+            return self.postProcess(handle)
 
     def release(self, handle: int) -> EventStatus:
         with self.mutex:
@@ -98,6 +100,9 @@ class HandleManager:
         with self.mutex:
             self.cv.wait_for(_is_finished, timeout)
 
+            return self.postProcess(handle)
+
+    def postProcess(self, handle):
         event_status = self.status[handle]
         if event_status.status == EventStatusEnum.DONE:
             return True
@@ -107,7 +112,8 @@ class HandleManager:
 
         if event_status.status == EventStatusEnum.WARN:
             logger.warning(
-                "When check the finished status event of encounted %s", event_status.err
+                "Checking the finished status event encounted warning: %s",
+                event_status.err,
             )
             return False
 

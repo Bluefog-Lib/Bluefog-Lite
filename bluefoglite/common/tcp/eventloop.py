@@ -17,7 +17,7 @@ import abc
 import selectors
 import socket
 import threading
-from typing import Union
+from typing import Optional, Union
 
 from bluefoglite.common import const
 
@@ -36,6 +36,7 @@ class EventLoop:
         self.running_thread = None
 
         self._cv = threading.Condition()
+        self.error: Optional[Exception] = None
 
     def __del__(self):
         self.close()
@@ -50,18 +51,26 @@ class EventLoop:
         self.running_thread.start()
 
     def _run(self):
-        # TODO add error handling in this function
         while not self.done:
             # self._cv.notify_all()
 
             # Find a better timeout choice? for closing the loop.
             events_list = self.sel.select(const.EVENT_LOOP_TIMEOUT)
             for key, event in events_list:
-                # TODO Add error handling
-                # key is the SelectorKey instance corresponding to a ready file object.
-                # SelectorKey is a namedtuple: (fileobj, fd, events, data)
-                # We force the data to be the instance of abstract class Handler.
-                key.data.handleEvent(event)
+                try:
+                    # key is the SelectorKey instance corresponding to a ready file object.
+                    # SelectorKey is a namedtuple: (fileobj, fd, events, data)
+                    # We force the data to be the instance of abstract class Handler.
+                    key.data.handleEvent(event)
+
+                # TODO Handle the error different with specified type
+                except Exception as e:  # pylint: disable=broad-except
+                    self.error = e
+                    break
+
+            if self.error:  # stopped unexcepted:
+                self.sel.close()
+                break
 
     def register(self, fd: Union[int, socket.socket], event: int, handler: Handler):
         self.sel.register(fd, event, handler)
@@ -79,5 +88,7 @@ class EventLoop:
     def close(self):
         self.done = True
         self.running_thread.join()
-
         self.sel.close()
+
+        if self.error:
+            raise self.error

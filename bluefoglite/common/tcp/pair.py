@@ -125,8 +125,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self.peer_rank = peer_rank
         # self.sock: Optional[socket.socket] = None
 
-        # TODO 1. make the buffer to use fixed the memory to increase the efficiency
-        # TODO 2. Use the tag to separate the message?
+        # TODO 1. Use the tag to separate the message?
         self._pending_send: Deque[Envelope] = collections.deque()
         self._pending_recv: Deque[Envelope] = collections.deque()
 
@@ -260,7 +259,23 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     def changeState(self, next_state: PairState):
         if next_state == PairState.CLOSED:
             # Do some cleanup job here
-            pass
+            for envelope in self._pending_recv:
+                envelope.buf.handleCompletion(
+                    envelope.handle,
+                    EventStatus(
+                        status=EventStatusEnum.WARN,
+                        err="Unfinished send/recv after pair is closed.",
+                    ),
+                )
+            for envelope in self._pending_send:
+                envelope.buf.handleCompletion(
+                    envelope.handle,
+                    EventStatus(
+                        status=EventStatusEnum.WARN,
+                        err="Unfinished send/recv after pair is closed.",
+                    ),
+                )
+
         self._state = next_state
         self._cv.notify_all()
 

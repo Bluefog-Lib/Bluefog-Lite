@@ -13,6 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
+import logging
 import os
 import socket
 import threading
@@ -184,8 +185,8 @@ def test_send_recv_obj(full_addr_list, reverse_send_recv):
 
 
 @pytest.mark.parametrize("reverse_send_recv", [False])
-def test_send_after_close(full_addr_list, array_list, reverse_send_recv):
-    def send_after_close(rank, size):
+def test_send_after_peer_close(full_addr_list, array_list, reverse_send_recv):
+    def send_after_peer_close(rank, size):
         event_loop = EventLoop()
         event_loop.run()
         pair = Pair(
@@ -215,7 +216,84 @@ def test_send_after_close(full_addr_list, array_list, reverse_send_recv):
 
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=send_after_close)
+    errors = _multi_thread_help(size=2, fn=send_after_peer_close)
+
+    for error in errors:
+        raise error
+
+
+@pytest.mark.parametrize("reverse_send_recv", [False])
+def test_close_before_send_finish(
+    full_addr_list, array_list, reverse_send_recv, caplog
+):
+    def close_before_send_finish(rank, size):
+        event_loop = EventLoop()
+        event_loop.run()
+        pair = Pair(
+            event_loop=event_loop,
+            self_rank=rank,
+            peer_rank=1 - rank,
+            full_address=full_addr_list[rank],
+        )
+        hm = HandleManager.getInstance()
+        send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
+
+        pair.connect(full_addr_list[1 - rank])
+        # Close immediate after Send
+        if rank == send_rank:
+            handle = hm.allocate()
+            buf = _build_sbuf_from_array(array_list[0])
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            # Close it withour wait sending.
+            with caplog.at_level(logging.WARNING):
+                pair.close()
+            assert len(caplog.record_tuples) == 1
+            assert caplog.record_tuples[0][:2] == ("BLF_LOGGER", logging.WARNING)
+        elif rank == recv_rank:
+            time.sleep(0.1)
+            pair.close()
+
+        event_loop.close()
+
+    errors = _multi_thread_help(size=2, fn=close_before_send_finish)
+
+    for error in errors:
+        raise error
+
+
+@pytest.mark.parametrize("reverse_send_recv", [False])
+def test_close_before_recv_finish(
+    full_addr_list, array_list, reverse_send_recv, caplog
+):
+    def close_before_recv_finish(rank, size):
+        event_loop = EventLoop()
+        event_loop.run()
+        pair = Pair(
+            event_loop=event_loop,
+            self_rank=rank,
+            peer_rank=1 - rank,
+            full_address=full_addr_list[rank],
+        )
+        hm = HandleManager.getInstance()
+        send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
+
+        pair.connect(full_addr_list[1 - rank])
+        if rank == send_rank:
+            time.sleep(0.1)
+            pair.close()
+        elif rank == recv_rank:
+            handle = hm.allocate()
+            buf = _build_sbuf_from_array(array_list[0])
+            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            # Close it without wait receiving.
+            with caplog.at_level(logging.WARNING):
+                pair.close()
+            assert len(caplog.record_tuples) == 1
+            assert caplog.record_tuples[0][:2] == ("BLF_LOGGER", logging.WARNING)
+
+        event_loop.close()
+
+    errors = _multi_thread_help(size=2, fn=close_before_recv_finish)
 
     for error in errors:
         raise error
