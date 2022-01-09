@@ -14,12 +14,14 @@
 # ==============================================================================
 
 import abc
+import logging
 import selectors
 import socket
 import threading
 from typing import Optional, Union
 
 from bluefoglite.common import const
+from bluefoglite.common.logger import logging
 
 
 class Handler(abc.ABC):
@@ -51,6 +53,11 @@ class EventLoop:
         self.running_thread = threading.Thread(target=EventLoop._run, args=(self,))
         self.running_thread.start()
 
+    def is_alive(self) -> bool:
+        if self.running_thread is None:
+            return False
+        return self.running_thread.is_alive()
+
     def _run(self):
         while not self.done:
             # self._cv.notify_all()
@@ -68,7 +75,7 @@ class EventLoop:
                 except Exception as e:  # pylint: disable=broad-except
                     self.error = e
                     break
-
+            logging.debug("_run: %s", self.done)
             if self.error:  # stopped unexcepted:
                 self.sel.close()
                 break
@@ -90,6 +97,7 @@ class EventLoop:
         if self.closed:
             return
         self.done = True
+
         self.running_thread.join()
         self.sel.close()
         self.closed = True

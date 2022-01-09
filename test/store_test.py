@@ -20,6 +20,7 @@ import time
 import threading
 
 from bluefoglite.common.store import InMemoryStore, FileStore
+from bluefoglite.testing.util import multi_thread_help
 
 import pytest  # type: ignore
 
@@ -36,30 +37,6 @@ def cleanup():
 
 
 atexit.register(cleanup)
-
-
-def _multi_thread_help(size, fn, timeout=10):
-    errors = []
-
-    def wrap_fn(rank, size):
-        try:
-            os.environ["BFL_WORLD_RANK"] = str(rank)
-            os.environ["BFL_WORLD_SIZE"] = str(size)
-            fn(rank=rank, size=size)
-        except Exception as e:
-            errors.append(e)
-
-    thread_list = [
-        threading.Thread(target=wrap_fn, args=(rank, size)) for rank in range(size)
-    ]
-
-    for t in thread_list:
-        t.start()
-
-    for t in thread_list:
-        t.join(timeout=timeout)
-
-    return errors
 
 
 @pytest.mark.parametrize("store", STORES)
@@ -80,7 +57,7 @@ def test_set_get(store):
         except Exception as e:
             errors.append(e)
 
-    errors = _multi_thread_help(size=2, fn=fn, timeout=2)
+    errors = multi_thread_help(size=2, fn=fn, timeout=2)
 
     store.reset()
 
@@ -102,7 +79,7 @@ def test_set_get_multiple(store):
         except Exception as e:
             errors.append(e)
 
-    errors = _multi_thread_help(size=4, fn=fn, timeout=2)
+    errors = multi_thread_help(size=4, fn=fn, timeout=2)
 
     store.reset()
 

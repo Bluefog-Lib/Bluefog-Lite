@@ -33,6 +33,9 @@ class Agent:
 
         self.event_loop.run()
 
+    def __del__(self):
+        self.close()
+
     def createAgentAddress(  # pylint: disable=no-self-use
         self, *, addr: Optional[TAddress] = None
     ) -> SocketFullAddress:
@@ -45,16 +48,20 @@ class Agent:
             sock_protocol=socket.IPPROTO_IP,
         )
 
-    def createContext(self, *, rank: int, size: int, addr: Optional[TAddress] = None):
+    def createContext(
+        self, *, rank: int, size: int, addr: Optional[TAddress] = None
+    ) -> "AgentContext":
         full_address = self.createAgentAddress(addr=addr)
         self.context = AgentContext(
             event_loop=self.event_loop, rank=rank, size=size, full_address=full_address
         )
+        return self.context
 
     def close(self):
         if self.context:
             self.context.close()
-        self.event_loop.close()
+        if self.event_loop.is_alive():
+            self.event_loop.close()
 
 
 class AgentContext:
@@ -83,16 +90,11 @@ class AgentContext:
         return self.pairs[peer_rank]
 
     def createPair(self, peer_rank) -> Pair:
-        pair_full_address = self.full_address
-        pair_full_address.addr = (
-            pair_full_address.addr[0],
-            pair_full_address.addr[1] + peer_rank,
-        )
         pair = Pair(
             event_loop=self._event_loop,
             self_rank=self.rank,
             peer_rank=peer_rank,
-            full_address=pair_full_address,
+            full_address=self.full_address,
         )
         self.pairs[peer_rank] = pair
         return pair

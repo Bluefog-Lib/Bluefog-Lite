@@ -73,7 +73,7 @@ jobs:
         cat tools/requirements_dev.txt | grep pytest | xargs pip install
     - name: Unit Test
       run: |
-        timeout 3m pytest -s -vv test
+        timeout 3m pytest -s -vv bluefoglite test
 
   macos-unit-test:
     
@@ -98,4 +98,4 @@ jobs:
         cat tools/requirements_dev.txt | grep pytest | xargs pip install
     - name: Unit Test
       run: |
-        timeout 3m pytest -s -vv test
+        timeout 3m pytest -s -vv bluefoglite test

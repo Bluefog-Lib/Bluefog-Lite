@@ -69,7 +69,7 @@ class SpecifiedBuffer(Buffer):
 
         handle = self.hm.allocate()
         # TODO: Make some verificaiton here
-        self.context.getPair(dst).send(
+        self.context.getOrCreatePair(dst).send(
             self, handle=handle, nbytes=nbytes, offset=offset, slot=slot
         )
         return handle
@@ -82,7 +82,7 @@ class SpecifiedBuffer(Buffer):
 
         handle = self.hm.allocate()
         # TODO Make some verificaiton here
-        self.context.getPair(src).recv(
+        self.context.getOrCreatePair(src).recv(
             self, handle=handle, nbytes=nbytes, offset=offset, slot=slot
         )
         return handle
@@ -107,7 +107,9 @@ class UnspecifiedBuffer(Buffer):
     ) -> int:
         handle = self.hm.allocate()
         # TODO Make some verificaiton here
-        self.context.getPair(src).recv(self, handle=handle, nbytes=-1, offset=0, slot=0)
+        self.context.getOrCreatePair(src).recv(
+            self, handle=handle, nbytes=-1, offset=0, slot=0
+        )
         return handle
 
     def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):

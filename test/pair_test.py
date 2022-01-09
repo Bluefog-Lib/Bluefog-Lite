@@ -29,30 +29,7 @@ from bluefoglite.common.handle_manager import HandleManager
 from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketFullAddress
-
-
-def _multi_thread_help(size, fn, timeout=10):
-    errors = []
-
-    def wrap_fn(rank, size):
-        try:
-            os.environ["BFL_WORLD_RANK"] = str(rank)
-            os.environ["BFL_WORLD_SIZE"] = str(size)
-            fn(rank=rank, size=size)
-        except Exception as e:
-            errors.append(e)
-
-    thread_list = [
-        threading.Thread(target=wrap_fn, args=(rank, size)) for rank in range(size)
-    ]
-
-    for t in thread_list:
-        t.start()
-
-    for t in thread_list:
-        t.join(timeout=timeout)
-
-    return errors
+from bluefoglite.testing.util import multi_thread_help
 
 
 @pytest.fixture
@@ -102,7 +79,7 @@ def test_connect(full_addr_list):
         pair.close()
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=listen_connect_close)
+    errors = multi_thread_help(size=2, fn=listen_connect_close)
 
     for error in errors:
         raise error
@@ -142,7 +119,7 @@ def test_send_recv_array(full_addr_list, array_list, reverse_send_recv):
         pair.close()
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=send_recv_array)
+    errors = multi_thread_help(size=2, fn=send_recv_array)
 
     for error in errors:
         raise error
@@ -178,7 +155,7 @@ def test_send_recv_obj(full_addr_list, reverse_send_recv):
         pair.close()
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=send_recv_obj)
+    errors = multi_thread_help(size=2, fn=send_recv_obj)
 
     for error in errors:
         raise error
@@ -216,7 +193,7 @@ def test_send_after_peer_close(full_addr_list, array_list, reverse_send_recv):
 
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=send_after_peer_close)
+    errors = multi_thread_help(size=2, fn=send_after_peer_close)
 
     for error in errors:
         raise error
@@ -261,7 +238,7 @@ def test_close_before_send_finish(
 
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=close_before_send_finish)
+    errors = multi_thread_help(size=2, fn=close_before_send_finish)
 
     for error in errors:
         raise error
@@ -305,7 +282,7 @@ def test_close_before_recv_finish(
 
         event_loop.close()
 
-    errors = _multi_thread_help(size=2, fn=close_before_recv_finish)
+    errors = multi_thread_help(size=2, fn=close_before_recv_finish)
 
     for error in errors:
         raise error
