@@ -15,7 +15,7 @@
 
 
 import socket
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketFullAddress, TAddress
@@ -72,12 +72,17 @@ class AgentContext:
         self.pairs: Dict[int, "Pair"] = {}
         self._event_loop = event_loop
 
-    def getPair(self, peer_rank):
+    def getPair(self, peer_rank) -> Pair:
+        if peer_rank not in self.pairs:
+            raise KeyError(f"Cannot find the Pair for {(self.rank, peer_rank)}")
+        return self.pairs[peer_rank]
+
+    def getOrCreatePair(self, peer_rank) -> Pair:
         if peer_rank not in self.pairs:
             self.pairs[peer_rank] = self.createPair(peer_rank)
         return self.pairs[peer_rank]
 
-    def createPair(self, peer_rank):
+    def createPair(self, peer_rank) -> Pair:
         pair_full_address = self.full_address
         pair_full_address.addr = (
             pair_full_address.addr[0],
@@ -92,19 +97,19 @@ class AgentContext:
         self.pairs[peer_rank] = pair
         return pair
 
-    def close(self):
+    def close(self) -> None:
         for _, pair in self.pairs.items():
             pair.close()
         self.pairs = {}
 
-    def connectFull(self, store):
+    def connectFull(self, store) -> None:
         def full_neighbor_fn(self_rank, peer_rank, size):
             del self_rank, peer_rank, size
             return True
 
-        return self._connectGivenNeighborFunc(store, full_neighbor_fn)
+        self._connectGivenNeighborFunc(store, full_neighbor_fn)
 
-    def connectRing(self, store):
+    def connectRing(self, store) -> None:
         def ring_neighbor_fn(self_rank, peer_rank, size):
             if peer_rank == (self_rank + 1) % size:
                 return True
@@ -112,11 +117,11 @@ class AgentContext:
                 return True
             return False
 
-        return self._connectGivenNeighborFunc(store, ring_neighbor_fn)
+        self._connectGivenNeighborFunc(store, ring_neighbor_fn)
 
-    def _connectGivenNeighborFunc(self, store, neighbor_fn):
+    def _connectGivenNeighborFunc(self, store, neighbor_fn) -> None:
         # It store the self address listening for the other ranks.
-        _all_address = []
+        _all_address: List[Optional[SocketFullAddress]] = []
 
         for i in range(self.size):
             is_neighbor = neighbor_fn(self.rank, i, self.size)
@@ -143,7 +148,7 @@ class AgentContext:
             addr = others_all_address[self.rank]
             logger.debug("%d connect to %d, addr %s", self.rank, i, addr)
 
-            pair = self.getPair(i)
+            pair = self.getOrCreatePair(i)
             pair.connect(addr)
 
         logger.debug("connect pairs done")
