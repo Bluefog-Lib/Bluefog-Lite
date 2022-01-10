@@ -132,22 +132,24 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self.listen()
 
     @property
-    def self_address(self):
+    def self_address(self) -> SocketFullAddress:
         return self._self_full_addr
 
     @property
-    def peer_address(self):
+    def peer_address(self) -> Optional[SocketFullAddress]:
         return self._peer_full_addr
 
     @property
-    def fd(self):
+    def fd(self) -> int:
+        if self.sock is None:
+            return -1
         return self.sock.fileno()
 
     @property
-    def state(self):
+    def state(self) -> PairState:
         return self._state
 
-    def listen(self):
+    def listen(self) -> None:
         """Listen in the port and register handle to selector."""
         with self._mutex:
             self.sock = socket.socket(
@@ -170,7 +172,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         logger.debug("finished listening register")
 
-    def connect(self, addr: SocketFullAddress):
+    def connect(self, addr: SocketFullAddress) -> None:
         """Actively connect to the port.
 
         Note pair (i, j) both create the listening function in the selector.
@@ -222,19 +224,19 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         logger.debug("connect func done")
 
-    def waitUntilConnected(self, timeout=None):
+    def waitUntilConnected(self, timeout=None) -> None:
         def pred():
             return self.state == PairState.CONNECTED
 
         self._cv.wait_for(pred, timeout)
 
-    def waitUntilClosed(self, timeout=None):
+    def waitUntilClosed(self, timeout=None) -> None:
         def pred():
             return self.state == PairState.CLOSED
 
         self._cv.wait_for(pred, timeout)
 
-    def close(self):
+    def close(self) -> None:
         with self._mutex:
             # if self.self_rank < self.peer_rank:
             #     # this is the server side, do nothing but wait the peer close
@@ -245,6 +247,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             # else:
             #     logger.error("Close to peer %d as client", self.peer_rank)
             #     # this is the client side, actively close the socket
+            if self.sock is None:
+                return
             try:
                 self._event_loop.unregister(self.sock)
                 self.sock.close()
@@ -254,7 +258,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 self.changeState(PairState.CLOSED)
             logger.info("Close to peer %d as client done", self.peer_rank)
 
-    def changeState(self, next_state: PairState):
+    def changeState(self, next_state: PairState) -> None:
         if next_state == PairState.CLOSED:
             # Do some cleanup job here
             for envelope in self._pending_recv:
@@ -277,7 +281,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self._state = next_state
         self._cv.notify_all()
 
-    def handleEvent(self, event: int):
+    def handleEvent(self, event: int) -> None:
         """Triggered by the selector. Note it is called under a different thread."""
         with self._mutex:
             if self.state == PairState.CLOSED:
@@ -308,7 +312,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     "unexpected PairState: %s when handling the event", self.state
                 )
 
-    def handleListening(self, event: int):
+    def handleListening(self, event: int) -> None:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         conn, _ = self.sock.accept()
@@ -324,7 +328,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self._self_full_addr.addr = self.sock.getsockname()
         self._finishConnected()
 
-    def handleConnecting(self, event: int):
+    def handleConnecting(self, event: int) -> None:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         # This function is triggered when the remote listening sock accept.
@@ -339,7 +343,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self._event_loop.unregister(self.sock)
         self._finishConnected()
 
-    def handleConnected(self, event: int):
+    def handleConnected(self, event: int) -> None:
         if event & selectors.EVENT_READ:
             # logger.error("%d, Triggered read", self.self_rank)
             self.read()
@@ -347,8 +351,10 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             # logger.error("%d, Triggered write", self.self_rank)
             self.write()
 
-    def _finishConnected(self):
+    def _finishConnected(self) -> None:
         # Reset the self and peer addr
+        if self.sock is None:
+            raise RuntimeError("Unexpected sock is None when finish the connection.")
         self._self_full_addr = self.sock.getsockname()
         self._peer_full_addr = self.sock.getpeername()
         self.sock.setblocking(False)
@@ -359,13 +365,13 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         self.changeState(PairState.CONNECTED)
 
-    def read(self):
+    def read(self) -> None:
         if self._pending_recv:
             # TODO consider supporting rendeveous mode as well as eager mode?
             envolope = self._pending_recv.popleft()
             self._read(envolope)
 
-    def write(self):
+    def write(self) -> None:
         if self._pending_send:
             envolope = self._pending_send.popleft()
             self._write(envolope)
@@ -374,7 +380,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     # See here https://www.python.org/dev/peps/pep-3151/#new-exception-classes
     # for the naming of error that possible thrown by socket in python.
 
-    def _read(self, envelope: Envelope):  # pylint: disable=too-many-branches
+    def _read(self, envelope: Envelope) -> None:  # pylint: disable=too-many-branches
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         # TODO: make a queue to send the message seperately
@@ -448,7 +454,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         logger.debug("handle read envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
 
-    def _write(self, envelope: Envelope):
+    def _write(self, envelope: Envelope) -> None:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         header = _create_header(envelope.nbytes)
@@ -493,7 +499,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
     def send(  # pylint: disable=too-many-arguments
         self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int
-    ):
+    ) -> None:
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
             if self.state != PairState.CONNECTED:
@@ -507,7 +513,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
     def recv(  # pylint: disable=too-many-arguments
         self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int
-    ):
+    ) -> None:
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
             if self.state != PairState.CONNECTED:
