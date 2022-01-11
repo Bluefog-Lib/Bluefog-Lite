@@ -159,13 +159,18 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             )
             # Set SO_REUSEADDR to allow that reuse of the listening port
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.sock.bind(self._self_full_addr.addr)
+            try:
+                self.sock.bind(self._self_full_addr.addr)
+            except Exception as e:
+                logger.error("Failed to bind %s", self._self_full_addr.addr)
+                raise e
             # backlog: queue up as many as 1 connect request
             self.sock.listen(1)
 
             self.sock.setblocking(False)
             # It is important to overwrite it since the bind addr can choose port 0.
             self._self_full_addr.addr = self.sock.getsockname()
+            logger.debug("bind to %s", self._self_full_addr.addr)
 
             self.changeState(PairState.LISTENING)
             self._event_loop.register(self.sock, selectors.EVENT_READ, self)
@@ -321,9 +326,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         # Note we change the listening socket to the connected sock
         self.sock = conn
         if not self._peer_full_addr:
-            raise RuntimeError(
-                "Handle socket listening without proper peer addr setup."
-            )
+            # The family, protocol, type should be the same.
+            self._peer_full_addr = self._self_full_addr
         self._peer_full_addr.addr = self.sock.getpeername()
         self._self_full_addr.addr = self.sock.getsockname()
         self._finishConnected()

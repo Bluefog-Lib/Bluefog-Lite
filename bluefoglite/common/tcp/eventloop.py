@@ -76,6 +76,8 @@ class EventLoop:
                     self.error = e
                     break
             logging.debug("_run: %s", self.done)
+
+            # TODO proper throw the error in the run thread to the main thread?
             if self.error:  # stopped unexcepted:
                 self.sel.close()
                 break
