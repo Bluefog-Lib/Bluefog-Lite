@@ -227,7 +227,7 @@ def test_close_before_send_finish(
                 hm.wait(handle=handle)
 
             assert len(caplog.record_tuples) == 1
-            assert caplog.record_tuples[0][:2] == ("BLF_LOGGER", logging.WARNING)
+            assert caplog.record_tuples[0][:2] == ("BFL_LOGGER", logging.WARNING)
             assert (
                 "Unfinished send/recv after pair is closed"
                 in caplog.record_tuples[0][2]
@@ -274,7 +274,7 @@ def test_close_before_recv_finish(
                 hm.wait(handle=handle)
 
             assert len(caplog.record_tuples) == 1
-            assert caplog.record_tuples[0][:2] == ("BLF_LOGGER", logging.WARNING)
+            assert caplog.record_tuples[0][:2] == ("BFL_LOGGER", logging.WARNING)
             assert (
                 "Unfinished send/recv after pair is closed"
                 in caplog.record_tuples[0][2]

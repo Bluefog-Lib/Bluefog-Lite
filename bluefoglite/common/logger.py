@@ -19,7 +19,7 @@ import os
 from bluefoglite.common import const
 
 global_rank = os.getenv(const.BFL_WORLD_RANK)
-logger = logging.getLogger(const.BLF_LOGGER)
+logger = logging.getLogger(const.BFL_LOGGER)
 levels = {
     "critical": logging.CRITICAL,
     "error": logging.ERROR,
@@ -28,7 +28,7 @@ levels = {
     "info": logging.INFO,
     "debug": logging.DEBUG,
 }
-set_level = os.getenv(const.BLF_LOG_LEVEL)
+set_level = os.getenv(const.BFL_LOG_LEVEL)
 if set_level is None:
     set_level = "warn"
 logger.setLevel(levels.get(set_level.lower(), '"warn"'))
