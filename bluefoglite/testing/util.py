@@ -31,7 +31,7 @@ def multi_thread_help(
         t.start()
 
     rest_timeout = timeout
-    for i, t in enumerate(thread_list):
+    for t in thread_list:
         t_start = time.time()
         t.join(timeout=max(0.5, rest_timeout))
         rest_timeout = timeout - (time.time() - t_start)
@@ -68,7 +68,7 @@ def multi_process_help(
         p.start()
 
     rest_timeout = timeout
-    for i, p in enumerate(process_list):
+    for p in process_list:
         t_start = time.time()
         p.join(timeout=max(0.5, rest_timeout))
         rest_timeout = timeout - (time.time() - t_start)
