@@ -14,12 +14,25 @@
 # ==============================================================================
 import logging
 import os
+import pytest  # type: ignore
 
 from bluefoglite.common import const
 from bluefoglite.common.logger import logger
 
 
-def test_normal_logging(caplog):
+@pytest.fixture
+def setup():
+    # Nothing to setup but we need teardown.
+    yield None
+    # Test purpose only -- reset the logger.
+    logger.remove_bfl_logger()
+    # Restore the os.environment
+    os.environ.pop(const.BFL_LOG_LEVEL, None)
+    os.environ.pop(const.BFL_WORLD_SIZE, None)
+    os.environ.pop(const.BFL_LOG_RANKS, None)
+
+
+def test_normal_logging(setup, caplog):  # pylint: disable=redefined-outer-name
     os.environ[const.BFL_LOG_LEVEL] = "debug"
     os.environ[const.BFL_WORLD_RANK] = "0"
 
@@ -37,10 +50,8 @@ def test_normal_logging(caplog):
     assert caplog.record_tuples[3] == ("BFL_LOGGER", logging.ERROR, "Test 4")
     assert caplog.record_tuples[4] == ("BFL_LOGGER", logging.FATAL, "Test 5")
 
-    logger.remove_bfl_logger()  # Test purpose only -- reset the logger.
 
-
-def test_logging_level(caplog):
+def test_logging_level(setup, caplog):  # pylint: disable=redefined-outer-name
     os.environ[const.BFL_LOG_LEVEL] = "error"
     os.environ[const.BFL_WORLD_RANK] = "0"
 
@@ -55,10 +66,8 @@ def test_logging_level(caplog):
     assert caplog.record_tuples[0] == ("BFL_LOGGER", logging.ERROR, "Test 4")
     assert caplog.record_tuples[1] == ("BFL_LOGGER", logging.FATAL, "Test 5")
 
-    logger.remove_bfl_logger()  # Test purpose only -- reset the logger.
 
-
-def test_log_ranks(caplog):
+def test_log_ranks(setup, caplog):  # pylint: disable=redefined-outer-name
     os.environ[const.BFL_LOG_LEVEL] = "debug"
     os.environ[const.BFL_WORLD_SIZE] = "4"
     os.environ[const.BFL_LOG_RANKS] = "1,2"
@@ -79,5 +88,3 @@ def test_log_ranks(caplog):
     assert len(caplog.record_tuples) == 2
     assert caplog.record_tuples[0] == ("BFL_LOGGER", logging.DEBUG, "Test 2")
     assert caplog.record_tuples[1] == ("BFL_LOGGER", logging.DEBUG, "Test 3")
-
-    logger.remove_bfl_logger()  # Test purpose only -- reset the logger.

@@ -1,6 +1,9 @@
 import os
+import multiprocessing
 import threading
 from typing import Callable, List
+
+from bluefoglite.common import const
 
 
 def multi_thread_help(
@@ -10,8 +13,10 @@ def multi_thread_help(
 
     def wrap_fn(rank, size):
         try:
-            os.environ["BFL_WORLD_RANK"] = str(rank)
-            os.environ["BFL_WORLD_SIZE"] = str(size)
+            # Cannot set the env variables since multiple threading shared
+            # the same env variables.
+            # os.environ[const.BFL_WORLD_RANK] = str(rank)
+            # os.environ[const.BFL_WORLD_SIZE] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:  # pylint: disable=broad-except
             errors.append(e)
@@ -25,5 +30,32 @@ def multi_thread_help(
 
     for t in thread_list:
         t.join(timeout=timeout)
+
+    return errors
+
+
+def multi_process_help(
+    size: int, fn: Callable[[int, int], None], timeout=10
+) -> List[Exception]:
+    errors: List[Exception] = []
+
+    def wrap_fn(rank, size):
+        try:
+            os.environ[const.BFL_WORLD_RANK] = str(rank)
+            os.environ[const.BFL_WORLD_SIZE] = str(size)
+            fn(rank=rank, size=size)
+        except Exception as e:  # pylint: disable=broad-except
+            errors.append(e)
+
+    process_list = [
+        multiprocessing.Process(target=wrap_fn, args=(rank, size))
+        for rank in range(size)
+    ]
+
+    for p in process_list:
+        p.start()
+
+    for p in process_list:
+        p.join(timeout=timeout)
 
     return errors

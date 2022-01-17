@@ -100,7 +100,6 @@ class logger:
                 log_ranks_str,
             )
             return True
-        print(f"self_rank: {os.getenv(const.BFL_WORLD_RANK)}, ranks: {log_ranks}")
         return os.getenv(const.BFL_WORLD_RANK) in log_ranks
 
     @classmethod
