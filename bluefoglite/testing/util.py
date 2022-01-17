@@ -1,6 +1,7 @@
 import os
 import multiprocessing
 import threading
+import time
 from typing import Callable, List
 
 from bluefoglite.common import const
@@ -29,11 +30,11 @@ def multi_thread_help(
     for t in thread_list:
         t.start()
 
+    rest_timeout = timeout
     for i, t in enumerate(thread_list):
-        if i == 0:
-            t.join(timeout=timeout)
-        else:
-            t.join(timeout=1)
+        t_start = time.time()
+        t.join(timeout=max(0.5, rest_timeout))
+        rest_timeout = timeout - (time.time() - t_start)
 
     for t in thread_list:
         if t.is_alive():
@@ -66,11 +67,11 @@ def multi_process_help(
         p.daemon = True
         p.start()
 
+    rest_timeout = timeout
     for i, p in enumerate(process_list):
-        if i == 0:
-            p.join(timeout=timeout)
-        else:
-            p.join(timeout=1)
+        t_start = time.time()
+        p.join(timeout=max(0.5, rest_timeout))
+        rest_timeout = timeout - (time.time() - t_start)
 
     for p in process_list:
         if p.exitcode is not None and p.exitcode != 0:
