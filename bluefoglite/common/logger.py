@@ -15,11 +15,9 @@
 
 import logging
 import os
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from bluefoglite.common import const
-
-_LOGGER_INITIALIZED = False
 
 
 def list_loggers():
@@ -31,7 +29,8 @@ def list_loggers():
 
 
 class logger:
-    _should_log: Optional[bool] = None
+    # In the test (multi-process mode), they shared the same logger
+    _should_log: Dict[str, bool] = {}
     _bfl_logger: Optional[logging.Logger] = None
 
     @classmethod
@@ -87,17 +86,13 @@ class logger:
                     continue
                 return False
         except RuntimeError:
-            raise RuntimeError("BlueFogLit world size is not set.")
+            raise RuntimeError("BlueFogLite world size is not set.")
         return True
 
     @classmethod
-    def _shouldLogging(cls) -> bool:
-        log_ranks_str = os.getenv(const.BFL_LOG_RANKS)
-        if log_ranks_str is None:
-            return True
-        ranks = log_ranks_str.split(",")
-        print(ranks)
-        if not cls.checkRanks(ranks):
+    def _shouldLogging(cls, log_ranks_str: str) -> bool:
+        log_ranks = log_ranks_str.split(",")
+        if not cls.checkRanks(log_ranks):
             # The rank is failed to parse, so just always logging
             logging.error(
                 "Failed to parse BFL_LOG_RANKS. The format should be "
@@ -105,13 +100,20 @@ class logger:
                 log_ranks_str,
             )
             return True
-        return os.getenv(const.BFL_WORLD_RANK) in ranks
+        print(f"self_rank: {os.getenv(const.BFL_WORLD_RANK)}, ranks: {log_ranks}")
+        return os.getenv(const.BFL_WORLD_RANK) in log_ranks
 
     @classmethod
     def shouldLogging(cls) -> bool:
-        if cls._should_log is None:
-            cls._should_log = cls._shouldLogging()
-        return cls._should_log
+        self_rank_str = os.getenv(const.BFL_WORLD_RANK)
+        log_ranks_str = os.getenv(const.BFL_LOG_RANKS)
+        if log_ranks_str is None:
+            return True
+        if self_rank_str is None:
+            raise RuntimeError("BlueFogLite rank is not set.")
+        if self_rank_str not in cls._should_log:
+            cls._should_log[self_rank_str] = cls._shouldLogging(log_ranks_str)
+        return cls._should_log[self_rank_str]
 
     @classmethod
     def info(cls, msg: object, *args, **kwargs):

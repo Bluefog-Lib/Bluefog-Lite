@@ -64,19 +64,15 @@ def test_log_ranks(caplog):
     os.environ[const.BFL_LOG_RANKS] = "1,2"
 
     with caplog.at_level(logging.DEBUG):
-        logger._should_log = None  # pylint: disable=protected-access
         os.environ[const.BFL_WORLD_RANK] = "0"
         logger.debug("Test 1")  # Not logged
 
-        logger._should_log = None  # pylint: disable=protected-access
         os.environ[const.BFL_WORLD_RANK] = "1"
         logger.debug("Test 2")  # logged
 
-        logger._should_log = None  # pylint: disable=protected-access
         os.environ[const.BFL_WORLD_RANK] = "2"
         logger.debug("Test 3")  # logged
 
-        logger._should_log = None  # pylint: disable=protected-access
         os.environ[const.BFL_WORLD_RANK] = "3"
         logger.debug("Test 4")  # not logged
 
