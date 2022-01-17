@@ -25,7 +25,7 @@ from bluefoglite.testing.util import multi_thread_help
 import pytest  # type: ignore
 
 runtime_str = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-shared_file_dir = os.path.join("/tmp", ".bluefoglite", runtime_str)
+shared_file_dir = os.path.join("/tmp", ".bluefoglite", __name__, runtime_str)
 if not os.path.exists(shared_file_dir):
     os.makedirs(shared_file_dir)
 STORES = [InMemoryStore(), FileStore(shared_file_dir)]
@@ -45,17 +45,14 @@ def test_set_get(store):
     value = "Fake Value"
 
     def fn(rank, size):
-        try:
-            if rank == 0:
-                time.sleep(0.1)
-                store.set(key, value)
-            elif rank == 1:
-                get_value = store.get(key)
-                assert get_value == value
-            else:
-                pass
-        except Exception as e:
-            errors.append(e)
+        if rank == 0:
+            time.sleep(0.1)
+            store.set(key, value)
+        elif rank == 1:
+            get_value = store.get(key)
+            assert get_value == value
+        else:
+            pass
 
     errors = multi_thread_help(size=2, fn=fn, timeout=2)
 
@@ -71,15 +68,12 @@ def test_set_get_multiple(store):
     value = "value_"
 
     def fn(rank, size):
-        try:
-            store.set(key + str(rank), value + str(rank))
-            for i in range(size):
-                get_value = store.get(key + str(i))
-                assert get_value == value + str(i)
-        except Exception as e:
-            errors.append(e)
+        store.set(key + str(rank), value + str(rank))
+        for i in range(size):
+            get_value = store.get(key + str(i))
+            assert get_value == value + str(i)
 
-    errors = multi_thread_help(size=4, fn=fn, timeout=2)
+    errors = multi_thread_help(size=4, fn=fn, timeout=10)
 
     store.reset()
 
@@ -90,4 +84,4 @@ def test_set_get_multiple(store):
 @pytest.mark.parametrize("store", STORES)
 def test_get_timeout(store):
     with pytest.raises(KeyError):
-        store.get(key="no_exist", timeout=1)
+        store.get(key="no_exist", timeout=0.5)
