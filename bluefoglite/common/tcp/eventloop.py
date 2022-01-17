@@ -50,7 +50,9 @@ class EventLoop:
             return
 
         # print('start running loop')
-        self.running_thread = threading.Thread(target=EventLoop._run, args=(self,))
+        self.running_thread = threading.Thread(
+            target=EventLoop._run, args=(self,), daemon=True
+        )
         self.running_thread.start()
 
     def is_alive(self) -> bool:
