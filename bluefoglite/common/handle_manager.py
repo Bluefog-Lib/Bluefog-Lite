@@ -18,7 +18,7 @@ import enum
 import threading
 from typing import Dict, Optional
 
-from bluefoglite.common.logger import logger
+from bluefoglite.common.logger import Logger
 
 
 class BlueFogLiteEventError(RuntimeError):
@@ -114,7 +114,7 @@ class HandleManager:
             raise BlueFogLiteEventError(f"Encounter error: {event_status.err}")
 
         if event_status.status == EventStatusEnum.WARN:
-            logger.warning(
+            Logger.get().warning(
                 "Checking the finished status event encounted warning: %s",
                 event_status.err,
             )

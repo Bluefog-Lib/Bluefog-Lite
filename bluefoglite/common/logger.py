@@ -28,10 +28,16 @@ def list_loggers():
                 print("     %s" % h)
 
 
-class logger:
+class DummyLogger:
+    def __getattr__(self, name):
+        return lambda *x: None
+
+
+class Logger:
     # In the test (multi-process mode), they shared the same logger
     _should_log: Dict[str, bool] = {}
     _bfl_logger: Optional[logging.Logger] = None
+    _dummy_logger = DummyLogger()
 
     @classmethod
     def get_bfl_logger(cls) -> logging.Logger:
@@ -115,31 +121,5 @@ class logger:
         return cls._should_log[self_rank_str]
 
     @classmethod
-    def info(cls, msg: object, *args, **kwargs):
-        if cls.shouldLogging():
-            bfl_logger = cls.get_bfl_logger()
-            bfl_logger.info(msg, *args, **kwargs)
-
-    @classmethod
-    def debug(cls, msg: object, *args, **kwargs):
-        if cls.shouldLogging():
-            bfl_logger = cls.get_bfl_logger()
-            bfl_logger.debug(msg, *args, **kwargs)
-
-    @classmethod
-    def warning(cls, msg: object, *args, **kwargs):
-        if cls.shouldLogging():
-            bfl_logger = cls.get_bfl_logger()
-            bfl_logger.warning(msg, *args, **kwargs)
-
-    @classmethod
-    def error(cls, msg: object, *args, **kwargs):
-        if cls.shouldLogging():
-            bfl_logger = cls.get_bfl_logger()
-            bfl_logger.error(msg, *args, **kwargs)
-
-    @classmethod
-    def fatal(cls, msg: object, *args, **kwargs):
-        if cls.shouldLogging():
-            bfl_logger = cls.get_bfl_logger()
-            bfl_logger.fatal(msg, *args, **kwargs)
+    def get(cls):
+        return cls.get_bfl_logger() if cls.shouldLogging() else cls._dummy_logger

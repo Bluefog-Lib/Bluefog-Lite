@@ -4,7 +4,7 @@ import threading
 from typing import Callable, List
 
 from bluefoglite.common import const
-from bluefoglite.common.logger import logger
+from bluefoglite.common.logger import Logger
 
 
 def multi_thread_help(
@@ -55,7 +55,7 @@ def multi_process_help(
             os.environ[const.BFL_WORLD_SIZE] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:  # pylint: disable=broad-except
-            logger.error(e)
+            Logger.get().error(e)
 
     process_list = [
         multiprocessing.Process(target=wrap_fn, args=(rank, size))

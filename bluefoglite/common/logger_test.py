@@ -17,7 +17,7 @@ import os
 import pytest  # type: ignore
 
 from bluefoglite.common import const
-from bluefoglite.common.logger import logger
+from bluefoglite.common.logger import Logger
 
 
 @pytest.fixture(name="setup")
@@ -25,7 +25,7 @@ def fixture_setup():
     # Nothing to setup but we need teardown.
     yield None
     # Test purpose only -- reset the logger.
-    logger.remove_bfl_logger()
+    Logger.remove_bfl_logger()
     # Restore the os.environment
     os.environ.pop(const.BFL_LOG_LEVEL, None)
     os.environ.pop(const.BFL_WORLD_SIZE, None)
@@ -37,11 +37,11 @@ def test_normal_logging(setup, caplog):
     os.environ[const.BFL_WORLD_RANK] = "0"
 
     with caplog.at_level(logging.DEBUG):
-        logger.debug("Test 1")
-        logger.info("Test 2")
-        logger.warning("Test 3")
-        logger.error("Test 4")
-        logger.fatal("Test 5")
+        Logger.get().debug("Test 1")
+        Logger.get().info("Test 2")
+        Logger.get().warning("Test 3")
+        Logger.get().error("Test 4")
+        Logger.get().fatal("Test 5")
 
     assert len(caplog.record_tuples) == 5
     assert caplog.record_tuples[0] == ("BFL_LOGGER", logging.DEBUG, "Test 1")
@@ -56,11 +56,11 @@ def test_logging_level(setup, caplog):
     os.environ[const.BFL_WORLD_RANK] = "0"
 
     with caplog.at_level(logging.DEBUG):
-        logger.debug("Test 1")
-        logger.info("Test 2")
-        logger.warning("Test 3")
-        logger.error("Test 4")
-        logger.fatal("Test 5")
+        Logger.get().debug("Test 1")
+        Logger.get().info("Test 2")
+        Logger.get().warning("Test 3")
+        Logger.get().error("Test 4")
+        Logger.get().fatal("Test 5")
 
     assert len(caplog.record_tuples) == 2
     assert caplog.record_tuples[0] == ("BFL_LOGGER", logging.ERROR, "Test 4")
@@ -74,16 +74,16 @@ def test_log_ranks(setup, caplog):
 
     with caplog.at_level(logging.DEBUG):
         os.environ[const.BFL_WORLD_RANK] = "0"
-        logger.debug("Test 1")  # Not logged
+        Logger.get().debug("Test 1")  # Not logged
 
         os.environ[const.BFL_WORLD_RANK] = "1"
-        logger.debug("Test 2")  # logged
+        Logger.get().debug("Test 2")  # logged
 
         os.environ[const.BFL_WORLD_RANK] = "2"
-        logger.debug("Test 3")  # logged
+        Logger.get().debug("Test 3")  # logged
 
         os.environ[const.BFL_WORLD_RANK] = "3"
-        logger.debug("Test 4")  # not logged
+        Logger.get().debug("Test 4")  # not logged
 
     assert len(caplog.record_tuples) == 2
     assert caplog.record_tuples[0] == ("BFL_LOGGER", logging.DEBUG, "Test 2")

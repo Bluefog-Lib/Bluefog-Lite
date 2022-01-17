@@ -24,8 +24,12 @@ from typing import Any, Deque, Tuple, Optional, Union
 
 from bluefoglite.common.tcp.buffer import Buffer
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
-from bluefoglite.common.handle_manager import EventStatus, EventStatusEnum
-from bluefoglite.common.logger import logger
+from bluefoglite.common.handle_manager import (
+    BlueFogLiteEventError,
+    EventStatus,
+    EventStatusEnum,
+)
+from bluefoglite.common.logger import Logger
 
 # Addresses can be either tuples of varying lengths (AF_INET, AF_INET6,
 # AF_NETLINK, AF_TIPC) or strings (AF_UNIX).
@@ -159,23 +163,29 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             )
             # Set SO_REUSEADDR to allow that reuse of the listening port
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                self.sock.bind(self._self_full_addr.addr)
-            except Exception as e:
-                logger.error("Failed to bind %s", self._self_full_addr.addr)
-                raise e
+            retried = 0
+            while retried < 10:
+                try:
+                    self.sock.bind(self._self_full_addr.addr)
+                    break
+                except OSError:
+                    retried += 1
+                    continue
+                except Exception as e:
+                    Logger.get().error("Failed to bind %s", self._self_full_addr.addr)
+                    raise e
             # backlog: queue up as many as 1 connect request
             self.sock.listen(1)
 
             self.sock.setblocking(False)
             # It is important to overwrite it since the bind addr can choose port 0.
             self._self_full_addr.addr = self.sock.getsockname()
-            logger.debug("bind to %s", self._self_full_addr.addr)
+            Logger.get().debug("bind to %s", self._self_full_addr.addr)
 
             self.changeState(PairState.LISTENING)
             self._event_loop.register(self.sock, selectors.EVENT_READ, self)
 
-        logger.debug("finished listening register")
+        Logger.get().debug("finished listening register")
 
     def connect(self, addr: SocketFullAddress) -> None:
         """Actively connect to the port.
@@ -191,9 +201,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             self._peer_full_addr = addr
             if self.self_rank < self.peer_rank:
                 # Self is listening side
-                # logger.debug(f"{self.self_rank}: waitUntilConnected ")
                 self.waitUntilConnected(timeout=None)
-                logger.debug("waitUntilConnected done")
+                Logger.get().debug("waitUntilConnected done")
             else:
                 if self.sock is None:
                     raise RuntimeError("The sock in pair is not created.")
@@ -227,7 +236,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
                 self.waitUntilConnected(timeout=None)
 
-        logger.debug("connect func done")
+        Logger.get().debug("connect func done")
 
     def waitUntilConnected(self, timeout=None) -> None:
         def pred():
@@ -258,10 +267,10 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 self._event_loop.unregister(self.sock)
                 self.sock.close()
             except ValueError as e:
-                logger.warning(e)
+                Logger.get().warning(e)
             finally:
                 self.changeState(PairState.CLOSED)
-            logger.info("Close to peer %d as client done", self.peer_rank)
+            Logger.get().info("Close to peer %d as client done", self.peer_rank)
 
     def changeState(self, next_state: PairState) -> None:
         if next_state == PairState.CLOSED:
@@ -292,7 +301,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             if self.state == PairState.CLOSED:
                 # TODO: 1. properly handle it 2. when closing the pair, cleanup the
                 # the events.
-                logger.info("Handle the event when the pair is already closed")
+                Logger.get().info("Handle the event when the pair is already closed")
                 return
 
             if self.state == PairState.LISTENING:
@@ -313,7 +322,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 #    2.  The peer socket is closed. It will send an empty read event.
                 self.handleConnected(event)
             else:
-                logger.warning(
+                Logger.get().warning(
                     "unexpected PairState: %s when handling the event", self.state
                 )
 
@@ -338,21 +347,28 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         # This function is triggered when the remote listening sock accept.
         # we wait util it is connected.
         # So we just check there is no error.
-        if self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR) != 0:
-            logger.error("Get error when try to connect other side of pair.")
-            self.close()
-            return
+        _sock_opt = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+        if _sock_opt != 0:
+            Logger.get().error(
+                "Get error when try to connect other side of pair: Sockopt: %s.",
+                _sock_opt,
+            )
+            raise BlueFogLiteEventError(
+                "Get error when try to connect other side of pair."
+            )
 
         # change from the read | write to read only
         self._event_loop.unregister(self.sock)
         self._finishConnected()
 
     def handleConnected(self, event: int) -> None:
+        """Handles the read/write events when the socket pair is connected.
+
+        Expected the self._mutex is hold during this function is called.
+        """
         if event & selectors.EVENT_READ:
-            # logger.error("%d, Triggered read", self.self_rank)
             self.read()
         if event & selectors.EVENT_WRITE:
-            # logger.error("%d, Triggered write", self.self_rank)
             self.write()
 
     def _finishConnected(self) -> None:
@@ -393,7 +409,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         header_bytes = b""
         end_pos = envelope.offset + envelope.nbytes
 
-        logger.debug("handle read envelope %s", envelope)
+        Logger.get().debug("handle read envelope %s", envelope)
         while True:
             try:
                 # Should be ready to read
@@ -419,12 +435,12 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
             except BlockingIOError as e:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
-                logger.debug("_read encountered %s", e)
+                Logger.get().debug("_read encountered %s", e)
                 if self.state == PairState.CLOSED:
                     break
             except ConnectionError as e:
                 # Other side pair closed the socket.
-                logger.warning(
+                Logger.get().warning(
                     "Encountered when recv: %s. Likely, the other "
                     "side of socket closed connection.",
                     e,
@@ -455,7 +471,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 if recv - HEADER_LENGTH >= content_len:
                     break
 
-        logger.debug("handle read envelope done: %s", envelope)
+        Logger.get().debug("handle read envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
 
     def _write(self, envelope: Envelope) -> None:
@@ -464,9 +480,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         header = _create_header(envelope.nbytes)
         end_pos = envelope.offset + envelope.nbytes
         sent = 0  # number of bytes sent
-        # logger.debug(f"{self.self_rank}: trigged write")
 
-        logger.debug("handle write envelope %s", envelope)
+        Logger.get().debug("handle write envelope %s", envelope)
         # TODO: make slot to send the message seperately and concurrently?
         while sent < envelope.nbytes + HEADER_LENGTH:
             try:
@@ -485,7 +500,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 pass
             except ConnectionError as e:
                 # Other side pair closed the socket.
-                logger.warning(
+                Logger.get().warning(
                     "Encountered when recv: %s. Likely, the other "
                     "side of socket closed connection.",
                     e,
@@ -498,7 +513,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 return
             else:
                 sent += num_bytes_sent
-        logger.debug("handle write envelope done: %s", envelope)
+        Logger.get().debug("handle write envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
 
     def send(  # pylint: disable=too-many-arguments

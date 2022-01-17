@@ -20,7 +20,7 @@ import pickle
 import threading
 import time
 from typing import Any, List
-from bluefoglite.common.logger import logger
+from bluefoglite.common.logger import Logger
 
 
 class FileStore:
@@ -35,7 +35,7 @@ class FileStore:
 
     def set(self, key: str, value: Any):
         if self._check_exist(key):
-            logger.warning("FileStore: overwrite the file")
+            Logger.get().warning("FileStore: overwrite the file")
         else:
             open(self._get_key_path(key), "a").close()
         with open(self._get_key_path(key), "wb") as f:
@@ -85,7 +85,7 @@ class FileStore:
             try:
                 os.remove(f)
             except OSError as e:
-                logger.debug("When reset the file store encountered: %s", e)
+                Logger.get().debug("When reset the file store encountered: %s", e)
 
 
 class InMemoryStore:

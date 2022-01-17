@@ -19,7 +19,7 @@ from typing import Dict, Optional, List
 
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketFullAddress, TAddress
-from bluefoglite.common.logger import logger
+from bluefoglite.common.logger import Logger
 
 # One agent can contain multiple Contexts.
 # Each Context should represent entire communication group like  (comm in MPI)
@@ -134,7 +134,7 @@ class AgentContext:
             pair = self.createPair(i)
             _all_address.append(pair.self_address)
 
-        logger.debug("start listening done")
+        Logger.get().debug("start listening done")
 
         # we need a global store to share between all processes.
         store.set(f"rank_addr_{self.rank}", _all_address)
@@ -148,9 +148,9 @@ class AgentContext:
             others_all_address = store.get(f"rank_addr_{i}")
             # The listening address open for self.
             addr = others_all_address[self.rank]
-            logger.debug("%d connect to %d, addr %s", self.rank, i, addr)
+            Logger.get().debug("%d connect to %d, addr %s", self.rank, i, addr)
 
             pair = self.getOrCreatePair(i)
             pair.connect(addr)
 
-        logger.debug("connect pairs done")
+        Logger.get().debug("connect pairs done")
