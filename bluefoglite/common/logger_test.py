@@ -20,8 +20,8 @@ from bluefoglite.common import const
 from bluefoglite.common.logger import logger
 
 
-@pytest.fixture
-def setup():
+@pytest.fixture(name="setup")
+def fixture_setup():
     # Nothing to setup but we need teardown.
     yield None
     # Test purpose only -- reset the logger.
@@ -32,7 +32,7 @@ def setup():
     os.environ.pop(const.BFL_LOG_RANKS, None)
 
 
-def test_normal_logging(setup, caplog):  # pylint: disable=redefined-outer-name
+def test_normal_logging(setup, caplog):
     os.environ[const.BFL_LOG_LEVEL] = "debug"
     os.environ[const.BFL_WORLD_RANK] = "0"
 
@@ -51,7 +51,7 @@ def test_normal_logging(setup, caplog):  # pylint: disable=redefined-outer-name
     assert caplog.record_tuples[4] == ("BFL_LOGGER", logging.FATAL, "Test 5")
 
 
-def test_logging_level(setup, caplog):  # pylint: disable=redefined-outer-name
+def test_logging_level(setup, caplog):
     os.environ[const.BFL_LOG_LEVEL] = "error"
     os.environ[const.BFL_WORLD_RANK] = "0"
 
@@ -67,7 +67,7 @@ def test_logging_level(setup, caplog):  # pylint: disable=redefined-outer-name
     assert caplog.record_tuples[1] == ("BFL_LOGGER", logging.FATAL, "Test 5")
 
 
-def test_log_ranks(setup, caplog):  # pylint: disable=redefined-outer-name
+def test_log_ranks(setup, caplog):
     os.environ[const.BFL_LOG_LEVEL] = "debug"
     os.environ[const.BFL_WORLD_SIZE] = "4"
     os.environ[const.BFL_LOG_RANKS] = "1,2"

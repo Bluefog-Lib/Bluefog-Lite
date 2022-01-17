@@ -32,8 +32,8 @@ from bluefoglite.common.tcp.pair import Pair, SocketFullAddress
 from bluefoglite.testing.util import multi_thread_help
 
 
-@pytest.fixture
-def full_addr_list(num=2):
+@pytest.fixture(name="full_addr_list")
+def fixture_full_addr_list(num=2):
     base_port = 18106
     while base_port < 2 ** 16:
         full_address_list = [
@@ -59,8 +59,8 @@ def full_addr_list(num=2):
     return full_address_list
 
 
-@pytest.fixture
-def array_list():
+@pytest.fixture(name="array_list")
+def fixture_array_list():
     n = 9
     return [np.arange(n), np.zeros((n,)).astype(int)]
 

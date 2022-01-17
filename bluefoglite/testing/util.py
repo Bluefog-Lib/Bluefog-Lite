@@ -73,7 +73,7 @@ def multi_process_help(
             p.join(timeout=1)
 
     for p in process_list:
-        if p.exitcode != None and p.exitcode != 0:
+        if p.exitcode is not None and p.exitcode != 0:
             errors.append(
                 RuntimeError(
                     f"Process didn't finish propoerly -- Exitcode: {p.exitcode}"
