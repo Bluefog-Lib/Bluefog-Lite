@@ -102,7 +102,7 @@ class AgentContext:
     def close(self) -> None:
         for _, pair in self.pairs.items():
             pair.close()
-        self.pairs = {}
+        self.pairs.clear()
 
     def connectFull(self, store) -> None:
         def full_neighbor_fn(self_rank, peer_rank, size):
@@ -148,9 +148,7 @@ class AgentContext:
             others_all_address = store.get(f"rank_addr_{i}")
             # The listening address open for self.
             addr = others_all_address[self.rank]
-            Logger.get().debug("%d connect to %d, addr %s", self.rank, i, addr)
-
-            pair = self.getOrCreatePair(i)
-            pair.connect(addr)
+            pair = self.getPair(i)
+            pair.connect(addr=addr)
 
         Logger.get().debug("connect pairs done")

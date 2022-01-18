@@ -185,8 +185,6 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             self.changeState(PairState.LISTENING)
             self._event_loop.register(self.sock, selectors.EVENT_READ, self)
 
-        Logger.get().debug("finished listening register")
-
     def connect(self, addr: SocketFullAddress) -> None:
         """Actively connect to the port.
 
@@ -228,6 +226,12 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 # connection is in progress.
                 self.sock.setblocking(False)
                 self.sock.connect_ex(self._peer_full_addr.addr)
+                Logger.get().debug(
+                    "%d call connection to %d, addr %s",
+                    self.self_rank,
+                    self.peer_rank,
+                    self._peer_full_addr.addr,
+                )
 
                 self.changeState(PairState.CONNECTING)
                 self._event_loop.register(
@@ -266,6 +270,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             try:
                 self._event_loop.unregister(self.sock)
                 self.sock.close()
+                self.sock = None
             except ValueError as e:
                 Logger.get().warning(e)
             finally:
@@ -349,6 +354,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         # So we just check there is no error.
         _sock_opt = self.sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
         if _sock_opt != 0:
+            # See the error number meaning in
+            # https://www.ibm.com/docs/en/zos/2.2.0?topic=codes-sockets-return-errnos
             Logger.get().error(
                 "Get error when try to connect other side of pair: Sockopt: %s.",
                 _sock_opt,

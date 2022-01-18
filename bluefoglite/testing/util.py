@@ -34,7 +34,7 @@ def multi_thread_help(
     for t in thread_list:
         t_start = time.time()
         t.join(timeout=max(0.5, rest_timeout))
-        rest_timeout = timeout - (time.time() - t_start)
+        rest_timeout -= time.time() - t_start
 
     for t in thread_list:
         if t.is_alive():
@@ -71,7 +71,7 @@ def multi_process_help(
     for p in process_list:
         t_start = time.time()
         p.join(timeout=max(0.5, rest_timeout))
-        rest_timeout = timeout - (time.time() - t_start)
+        rest_timeout -= time.time() - t_start
 
     for p in process_list:
         if p.exitcode is not None and p.exitcode != 0:
