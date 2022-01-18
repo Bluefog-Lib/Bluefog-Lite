@@ -1,4 +1,5 @@
 import datetime
+import functools
 import os
 
 import numpy as np  # type: ignore
@@ -27,10 +28,7 @@ def fixture_store():
 
 @pytest.mark.parametrize("size", [2, 3, 4, 5])
 def test_broadcast_one_to_all(store, size):
-    dim = 10
-    root_rank = 0
-
-    def broadcast(rank, size):
+    def broadcast(rank, size, dim, root_rank):
         agent = Agent()
         array = np.array([rank] * dim)
         context = agent.createContext(rank=rank, size=size)
@@ -41,17 +39,18 @@ def test_broadcast_one_to_all(store, size):
         broadcast_one_to_all(buf=buf, root_rank=root_rank, context=context)
         np.testing.assert_allclose(array, np.array([root_rank] * dim))
 
-    errors = multi_process_help(size=size, fn=broadcast)
+    dim = 10
+    root_rank = 0
+    _broadcast = functools.partial(broadcast, dim=dim, root_rank=root_rank)
+
+    errors = multi_process_help(size=size, fn=_broadcast)
     for error in errors:
         raise error
 
 
 @pytest.mark.parametrize("size", [2, 3, 4, 5])
 def test_broadcast_spreading(store, size):
-    dim = 10
-    root_rank = 0
-
-    def broadcast(rank, size):
+    def broadcast(rank, size, dim, root_rank):
         agent = Agent()
         array = np.array([rank] * dim)
         context = agent.createContext(rank=rank, size=size)
@@ -62,7 +61,10 @@ def test_broadcast_spreading(store, size):
         broadcast_spreading(buf=buf, root_rank=root_rank, context=context)
         np.testing.assert_allclose(array, np.array([root_rank] * dim))
 
-    errors = multi_process_help(size=size, fn=broadcast)
+    dim = 10
+    root_rank = 0
+    _broadcast = functools.partial(broadcast, dim=dim, root_rank=root_rank)
 
+    errors = multi_process_help(size=size, fn=_broadcast)
     for error in errors:
         raise error
