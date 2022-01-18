@@ -25,10 +25,11 @@ def fixture_store():
     f_store.close()
 
 
+@pytest.mark.skip("WIP")
 def test_broadcast_one_to_all(store):
     dim = 10
     root_rank = 0
-    size = 3
+    size = 2
 
     def broadcast(rank, size):
         agent = Agent()
