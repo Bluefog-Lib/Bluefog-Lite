@@ -1,6 +1,7 @@
 import datetime
 import functools
 import os
+import sys
 
 import numpy as np  # type: ignore
 import pytest  # type: ignore
@@ -26,6 +27,11 @@ def fixture_store():
     f_store.close()
 
 
+# See https://github.com/spack/spack/issues/14102 as example
+@pytest.mark.skipif(
+    sys.platform == "darwin" and sys.version_info[:2] == (3, 8),
+    reason="Can't pickle local object in multiprocess",
+)
 @pytest.mark.parametrize("size", [2, 3, 4, 5])
 def test_broadcast_one_to_all(store, size):
     def broadcast(rank, size, dim, root_rank):
@@ -48,6 +54,11 @@ def test_broadcast_one_to_all(store, size):
         raise error
 
 
+# See https://github.com/spack/spack/issues/14102 as example
+@pytest.mark.skipif(
+    sys.platform == "darwin" and sys.version_info[:2] == (3, 8),
+    reason="Can't pickle local object in multiprocess",
+)
 @pytest.mark.parametrize("size", [2, 3, 4, 5])
 def test_broadcast_spreading(store, size):
     def broadcast(rank, size, dim, root_rank):
