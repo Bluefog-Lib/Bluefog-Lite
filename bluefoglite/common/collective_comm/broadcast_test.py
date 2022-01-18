@@ -25,17 +25,16 @@ def fixture_store():
     f_store.close()
 
 
-@pytest.mark.skip("WIP")
-def test_broadcast_one_to_all(store):
+@pytest.mark.parametrize("size", [2, 3, 4, 5])
+def test_broadcast_one_to_all(store, size):
     dim = 10
     root_rank = 0
-    size = 2
 
     def broadcast(rank, size):
         agent = Agent()
         array = np.array([rank] * dim)
         context = agent.createContext(rank=rank, size=size)
-        context.connectRing(store)
+        context.connectFull(store)
         buf = SpecifiedBuffer(
             context, buffer_view=array.data, buffer_length=array.nbytes
         )
@@ -47,17 +46,16 @@ def test_broadcast_one_to_all(store):
         raise error
 
 
-@pytest.mark.skip("WIP")
-def test_broadcast_spreading(store):
+@pytest.mark.parametrize("size", [2, 3, 4, 5])
+def test_broadcast_spreading(store, size):
     dim = 10
     root_rank = 0
-    size = 2
 
     def broadcast(rank, size):
         agent = Agent()
         array = np.array([rank] * dim)
         context = agent.createContext(rank=rank, size=size)
-        context.connectRing(store)
+        context.connectFull(store)
         buf = SpecifiedBuffer(
             context, buffer_view=array.data, buffer_length=array.nbytes
         )
