@@ -16,7 +16,7 @@
 import copy
 import math
 import socket
-from typing import Callable, Dict, Optional, List, Tuple
+from typing import Callable, Dict, Optional, List
 
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketFullAddress, TAddress

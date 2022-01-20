@@ -113,9 +113,9 @@ def test_connect_hypercube(size):
         (6, 4),
         (7, 6),
         (8, 5),
-        (16, 7),
-        (27, 10),
-        (32, 9),
+        # (16, 7),
+        # (27, 10),
+        # (32, 9),
     ],
 )
 def test_connect_exponential2(size, expected_pairs):
