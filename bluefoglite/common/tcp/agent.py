@@ -14,8 +14,9 @@
 # ==============================================================================
 
 import copy
+import math
 import socket
-from typing import Dict, Optional, List
+from typing import Callable, Dict, Optional, List, Tuple
 
 from bluefoglite.common.tcp.eventloop import EventLoop
 from bluefoglite.common.tcp.pair import Pair, SocketFullAddress, TAddress
@@ -121,7 +122,31 @@ class AgentContext:
 
         self._connectGivenNeighborFunc(store, ring_neighbor_fn)
 
-    def _connectGivenNeighborFunc(self, store, neighbor_fn) -> None:
+    def connectHypercube(self, store) -> None:
+        def hypercube_neighbor_fn(self_rank, peer_rank, size):
+            dim = math.ceil(math.log2(size))
+            for i in range(dim):
+                if self_rank ^ (1 << i) == peer_rank:
+                    return True
+            return False
+
+        self._connectGivenNeighborFunc(store, hypercube_neighbor_fn)
+
+    def connectExponentialTwo(self, store) -> None:
+        def expo2_neighbor_fn(self_rank, peer_rank, size):
+            diff = abs(self_rank - peer_rank)
+            diff2 = size - abs(self_rank - peer_rank)
+            if diff & (diff - 1) == 0:
+                return True
+            if diff2 & (diff2 - 1) == 0:
+                return True
+            return False
+
+        self._connectGivenNeighborFunc(store, expo2_neighbor_fn)
+
+    def _connectGivenNeighborFunc(
+        self, store, neighbor_fn: Callable[[int, int, int], bool]
+    ) -> None:
         # It store the self address listening for the other ranks.
         _all_address: List[Optional[SocketFullAddress]] = []
 
@@ -131,6 +156,12 @@ class AgentContext:
                 # Just placeholder
                 _all_address.append(None)
                 continue
+
+            if not neighbor_fn(i, self.rank, self.size):
+                raise ValueError(
+                    "The connection function must be symmetry, "
+                    "i.e., neighbor_fn(i, j, size) ==  neighbor_fn(j, i, size)"
+                )
             pair = self.createPair(i)
             _all_address.append(pair.self_address)
 
