@@ -23,6 +23,21 @@ def broadcast_one_to_all(
         buf.waitCompletion(h)
 
 
+def broadcast_ring(
+    buf: SpecifiedBuffer, root_rank: int, context: AgentContext, *, tag=0
+):
+    virtual_rank = (context.rank - root_rank) % context.size
+    next_rank = (context.rank + 1) % context.size
+    prev_rank = (context.rank - 1) % context.size
+    for r in range(context.size - 1):
+        if virtual_rank == r:
+            buf.send(next_rank)
+        elif virtual_rank == r + 1:
+            buf.recv(prev_rank)
+        else:
+            pass
+
+
 def broadcast_spreading(
     buf: SpecifiedBuffer, root_rank: int, context: AgentContext, *, tag=0
 ):
