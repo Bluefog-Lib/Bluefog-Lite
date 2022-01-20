@@ -137,7 +137,7 @@ def test_connect_exponential2(size, expected_pairs):
                 assert len(pair.connect.call_args_list) == 1
                 pair.connect.assert_called_with(addr=f"{peer}<-{rank}")
 
-    errors = multi_thread_help(size=size, fn=fn)
+    errors = multi_thread_help(size=size, fn=fn, timeout=15)
 
     # TODO check the value stored in the store.
     # print("Value in store: ", store.store)
