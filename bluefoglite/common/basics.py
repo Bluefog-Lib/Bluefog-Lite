@@ -17,7 +17,7 @@ import io
 import json
 import os
 import pickle
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np  # type: ignore
 
@@ -40,29 +40,52 @@ def _json_decode(json_bytes: bytes, encoding: str) -> Dict:
 
 class BlueFogLiteGroup:
     def __init__(self) -> None:
-        self._agent = None
-        self._store = None
+        self._agent: Optional[Agent] = None
+        self._store: Optional[FileStore] = None
 
-    def init(self, store=None):
+        self._rank: Optional[int] = None
+        self._size: Optional[int] = None
+
+    def init(self, store=None, rank: Optional[int] = None, size: Optional[int] = None):
+        if store is None:
+            _file_store_loc = os.getenv(const.BFL_FILE_STORE)
+            if _file_store_loc is None:
+                raise RuntimeError(
+                    f"Environment variable {const.BFL_FILE_STORE} -- the path for"
+                    "a writtable directory like tmp/.bluefoglite, must be provided."
+                )
+            self._store = FileStore(_file_store_loc)
+        else:
+            store = store
+
+        _world_rank_env = os.getenv(const.BFL_WORLD_RANK)
+        _world_size_env = os.getenv(const.BFL_WORLD_SIZE)
+        if _world_rank_env is None or _world_size_env is None:
+            raise RuntimeError(
+                "All BluefogLite processes must be specified with "
+                f"environment variable {const.BFL_WORLD_RANK} and "
+                f"{const.BFL_WORLD_SIZE} with string value for integer."
+            )
+        self._rank = int(_world_rank_env) if rank is None else rank
+        self._size = int(_world_size_env) if size is None else size
+
         self._agent = Agent()
-        self._agent.createContext(rank=self.rank(), size=self.size())
-        self._store = (
-            FileStore(os.getenv(const.BFL_FILE_STORE)) if store is None else store
-        )
-
-        self._agent.context.connectRing(store=self._store)
+        context = self._agent.createContext(rank=self._rank, size=self._size)
+        context.connectRing(store=self._store)
 
     def shutdown(self):
         if self._agent is not None:
             self._agent.close()
 
-    def rank(self):  # pylint: disable=no-self-use
-        rank = os.getenv(const.BFL_WORLD_RANK)
-        return int(rank) if rank else 0
+    def rank(self) -> int:
+        if self._rank is None:
+            raise RuntimeError("Bluefoglite must call init() function first.")
+        return self._rank
 
-    def size(self):  # pylint: disable=no-self-use
-        size = os.getenv(const.BFL_WORLD_SIZE)
-        return int(size) if size else 1
+    def size(self) -> int:
+        if self._size is None:
+            raise RuntimeError("Bluefoglite must call init() function first.")
+        return self._size
 
     def _check_rank(self, rank):
         error_msg = "dst or src must be an interger between 0 and size-1."
