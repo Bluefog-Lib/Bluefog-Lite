@@ -16,7 +16,7 @@
 
 import abc
 import threading
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Union
 
 import numpy as np  # type: ignore
 
@@ -102,7 +102,7 @@ class NumpyBuffer(SpecifiedBuffer):
     def __init__(self, context: "AgentContext", array: np.ndarray) -> None:
         super().__init__(context, array.data, array.nbytes)
 
-        self._array = array  # Should not use it since it may change?
+        self.array = array  # Should not use it since it may change?
 
         self.dtype = array.dtype
         self.shape = array.shape
@@ -111,6 +111,13 @@ class NumpyBuffer(SpecifiedBuffer):
     def clone(self):
         new_array = np.empty(self.shape, dtype=self.dtype)
         return NumpyBuffer(self.context, new_array)
+
+    # TODO: numerical ops should not be member function of Buffer.
+    def add_(self, other_buf: "NumpyBuffer"):
+        self.array += other_buf.array
+
+    def div_(self, factor: Union[int, float]):
+        self.array /= factor
 
 
 class UnspecifiedBuffer(Buffer):
