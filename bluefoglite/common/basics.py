@@ -23,7 +23,11 @@ import numpy as np  # type: ignore
 
 from bluefoglite.common import const
 from bluefoglite.common.tcp.agent import Agent
-from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
+from bluefoglite.common.tcp.buffer import (
+    NumpyBuffer,
+    SpecifiedBuffer,
+    UnspecifiedBuffer,
+)
 from bluefoglite.common.store import FileStore
 
 
@@ -98,9 +102,7 @@ class BlueFogLiteGroup:
 
         # TODO check send/recv type?
         if isinstance(obj_or_array, np.ndarray):
-            buf = SpecifiedBuffer(
-                self._agent.context, obj_or_array.data, obj_or_array.nbytes
-            )
+            buf = NumpyBuffer(self._agent.context, obj_or_array)
         else:
             message = pickle.dumps(obj_or_array)
             buf = SpecifiedBuffer(
@@ -115,9 +117,7 @@ class BlueFogLiteGroup:
 
         # TODO check send/recv type?
         if isinstance(obj_or_array, np.ndarray):
-            buf = SpecifiedBuffer(
-                self._agent.context, obj_or_array.data, obj_or_array.nbytes
-            )
+            buf = NumpyBuffer(self._agent.context, obj_or_array)
             # TODO: Check if src is neighbor or not
             buf.recv(src)
             return obj_or_array

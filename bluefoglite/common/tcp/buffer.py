@@ -18,6 +18,8 @@ import abc
 import threading
 from typing import Optional, TYPE_CHECKING
 
+import numpy as np
+
 from bluefoglite.common.handle_manager import HandleManager, EventStatus
 
 if TYPE_CHECKING:
@@ -94,6 +96,21 @@ class SpecifiedBuffer(Buffer):
     def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
         handle = self.irecv(src, nbytes=nbytes, offset=offset, slot=slot)
         self.waitCompletion(handle)
+
+
+class NumpyBuffer(SpecifiedBuffer):
+    def __init__(self, context: "AgentContext", array: np.ndarray) -> None:
+        super().__init__(context, array.data, array.nbytes)
+
+        self._array = array  # Should not use it since it may change?
+
+        self.dtype = array.dtype
+        self.shape = array.shape
+        self.itemsize = array.itemsize
+
+    def clone(self):
+        new_array = np.empty(self.shape, dtype=self.dtype)
+        return NumpyBuffer(self.context, new_array)
 
 
 class UnspecifiedBuffer(Buffer):
