@@ -21,6 +21,7 @@ def multi_thread_help(
             # os.environ[const.BFL_WORLD_SIZE] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:  # pylint: disable=broad-except
+            Logger.get().error(e)
             errors.append(e)
 
     thread_list = [
