@@ -11,8 +11,13 @@ from bluefoglite.common.collective_comm.broadcast import (
 )
 from bluefoglite.common.tcp.buffer import SpecifiedBuffer
 from bluefoglite.common.tcp.agent import Agent
-from bluefoglite.testing.fixture import fixture_store  # pylint: disable=unused-import
+from bluefoglite.testing.fixture import fixture_store
 from bluefoglite.testing.util import multi_process_help
+
+
+@pytest.fixture(name="store", scope="function")
+def fixture_store_wrapper():
+    yield from fixture_store(__name__)
 
 
 # See https://github.com/spack/spack/issues/14102 as example
@@ -38,6 +43,7 @@ def test_broadcast_one_to_all(store, size):
     _broadcast = functools.partial(broadcast, dim=dim, root_rank=root_rank)
 
     errors = multi_process_help(size=size, fn=_broadcast)
+    store.reset()
     for error in errors:
         raise error
 
@@ -64,6 +70,7 @@ def test_broadcast_ring(store, size):
     _broadcast = functools.partial(broadcast, dim=dim, root_rank=root_rank)
 
     errors = multi_process_help(size=size, fn=_broadcast)
+    store.reset()
     for error in errors:
         raise error
 

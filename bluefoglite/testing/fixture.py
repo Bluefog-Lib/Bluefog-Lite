@@ -1,15 +1,12 @@
 import datetime
 import os
 
-import pytest  # type: ignore
-
 from bluefoglite.common.store import FileStore
 
 
-@pytest.fixture(name="store")
-def fixture_store():
+def fixture_store(name):
     runtime_str = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    shared_file_dir = os.path.join("/tmp", ".bluefoglite", __name__, runtime_str)
+    shared_file_dir = os.path.join("/tmp", ".bluefoglite", name, runtime_str)
     if not os.path.exists(shared_file_dir):
         os.makedirs(shared_file_dir)
     f_store = FileStore(shared_file_dir)

@@ -7,7 +7,12 @@ from bluefoglite.common.collective_comm.allreduce import allreduce_tree
 from bluefoglite.common.tcp.buffer import NumpyBuffer
 from bluefoglite.common.tcp.agent import Agent
 from bluefoglite.testing.util import multi_process_help
-from bluefoglite.testing.fixture import fixture_store  # pylint: disable=unused-import
+from bluefoglite.testing.fixture import fixture_store
+
+
+@pytest.fixture(name="store")
+def fixture_store_wrapper():
+    yield from fixture_store(__name__)
 
 
 # See https://github.com/spack/spack/issues/14102 as example
@@ -30,5 +35,6 @@ def test_allreduce_tree(store, size):
         np.testing.assert_allclose(array, expected_array)
 
     errors = multi_process_help(size=size, fn=allreduce)
+    store.reset()
     for error in errors:
         raise error
