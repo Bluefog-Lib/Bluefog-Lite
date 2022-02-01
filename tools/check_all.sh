@@ -11,3 +11,8 @@ echo ""
 echo ""
 echo "===================Running mypy==================="
 tools/mypy.sh
+
+echo ""
+echo ""
+echo "===================Running pytest_profile==================="
+tools/profile_test.sh
