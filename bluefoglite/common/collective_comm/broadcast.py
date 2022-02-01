@@ -62,3 +62,4 @@ def broadcast_spreading(
             buf.recv(real_recv_from)
         else:
             pass
+    # Add barrier???

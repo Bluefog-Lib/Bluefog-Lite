@@ -75,6 +75,10 @@ def test_broadcast_ring(store, size):
         raise error
 
 
+@pytest.mark.skip(
+    "Encountered when recv: [Errno 32] Broken pipe."
+    "Likely, the other side of socket closed connection."
+)
 # See https://github.com/spack/spack/issues/14102 as example
 @pytest.mark.skipif(
     sys.platform == "darwin" and sys.version_info[:2] == (3, 8),
