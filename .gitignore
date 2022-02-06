@@ -139,3 +139,4 @@ examples/.profile/*
 
 # timeline log file
 .log/*
+.profile/

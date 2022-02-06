@@ -21,6 +21,7 @@ def multi_thread_help(
             # os.environ[const.BFL_WORLD_SIZE] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:  # pylint: disable=broad-except
+            Logger.get().error(e)
             errors.append(e)
 
     thread_list = [
@@ -49,17 +50,19 @@ def multi_process_help(
     size: int, fn: Callable[[int, int], None], timeout=10
 ) -> List[Exception]:
     errors: List[Exception] = []
+    error_queue: "multiprocessing.Queue[Exception]" = multiprocessing.Queue()
 
-    def wrap_fn(rank, size):
+    def wrap_fn(rank, size, error_queue):
         try:
             os.environ[const.BFL_WORLD_RANK] = str(rank)
             os.environ[const.BFL_WORLD_SIZE] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:  # pylint: disable=broad-except
             Logger.get().error(e)
+            error_queue.put(e)
 
     process_list = [
-        multiprocessing.Process(target=wrap_fn, args=(rank, size))
+        multiprocessing.Process(target=wrap_fn, args=(rank, size, error_queue))
         for rank in range(size)
     ]
 
@@ -86,5 +89,6 @@ def multi_process_help(
                 TimeoutError(f"Process cannot finish within {timeout} seconds.")
             )
             p.terminate()
-
+    while not error_queue.empty():
+        errors.append(error_queue.get())
     return errors
