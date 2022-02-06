@@ -15,6 +15,7 @@
 
 import dataclasses
 import collections
+import copy
 import enum
 import selectors
 import socket
@@ -55,6 +56,14 @@ class SocketFullAddress:
     sock_family: int = socket.AF_INET
     sock_type: int = socket.SOCK_STREAM
     sock_protocol: int = socket.IPPROTO_IP
+
+    def copy(self):
+        return SocketFullAddress(
+            addr=copy.copy(self.addr),
+            sock_family=self.sock_family,
+            sock_type=self.sock_type,
+            sock_protocol=self.sock_protocol,
+        )
 
 
 # Fix length-header
@@ -116,7 +125,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self._event_loop = event_loop
         self._state = PairState.INITIALIZING
         self._peer_full_addr: Optional[SocketFullAddress] = None
-        self._self_full_addr: SocketFullAddress = full_address
+        self._self_full_addr: SocketFullAddress = full_address.copy()
         self.sock: Optional[socket.socket] = None
 
         # We need mutex since the handle called in the event loop is

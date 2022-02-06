@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-import copy
 import math
 import socket
 from typing import Callable, Dict, Optional, List
@@ -95,7 +94,7 @@ class AgentContext:
             event_loop=self._event_loop,
             self_rank=self.rank,
             peer_rank=peer_rank,
-            full_address=copy.copy(self.full_address),  # important!
+            full_address=self.full_address.copy(),  # copy is important!
         )
         self.pairs[peer_rank] = pair
         return pair
