@@ -24,6 +24,7 @@ import numpy as np  # type: ignore
 from bluefoglite.common import const
 from bluefoglite.common.collective_comm import allreduce_tree
 from bluefoglite.common.collective_comm import broadcast_one_to_all, broadcast_spreading
+from bluefoglite.common.logger import Logger
 from bluefoglite.common.tcp.agent import Agent
 from bluefoglite.common.tcp.buffer import (
     NumpyBuffer,
@@ -136,6 +137,8 @@ class BlueFogLiteGroup:
         buf = NumpyBuffer(self._agent.context, array)
         return buf
 
+    # TODO 1.Distinguish inplace versus not inplace change.
+    # TODO 2. Add nonblocking version.
     def broadcast(self, array: np.ndarray, root_rank: int):
         self._check_rank(root_rank)
         buf = self._prepare_numpy_buffer(array)
@@ -144,14 +147,34 @@ class BlueFogLiteGroup:
             broadcast_one_to_all(buf, root_rank, buf.context)
         else:
             broadcast_spreading(buf, root_rank, buf.context)
+        return buf.array
 
     def broadcast_nonblocking(self, array: np.ndarray, root_rank: int):
         raise NotImplementedError
 
     def allreduce(self, array: np.ndarray, agg_op: str = "AVG"):
+        if agg_op == "AVG" and array.dtype not in [
+            np.float16,
+            np.float32,
+            np.float64,
+            np.complex64,
+        ]:
+            Logger.get().warning(
+                "allreduce with AVG should call the array with floating datatype "
+                "but the provided one is %s. Auto-casting it.",
+                array.dtype,
+            )
+            if array.dtype in [np.int8, np.int16]:
+                array = array.astype(np.float16)
+            elif array.dtype == np.int32:
+                array = array.astype(np.float32)
+            else:
+                array = array.astype(np.float64)
+
         buf = self._prepare_numpy_buffer(array)
 
         allreduce_tree(buf, buf.context, agg_op=agg_op)
+        return buf.array
 
     def allreduce_nonblocking(self, array: np.ndarray, agg_op: str = "AVG"):
         raise NotImplementedError
