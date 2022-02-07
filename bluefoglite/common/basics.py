@@ -134,6 +134,10 @@ class BlueFogLiteGroup:
         if not isinstance(array, np.ndarray):
             raise ValueError("Input array has to be numpy array only for now")
 
+        if self._agent is None or self._agent.context is None:
+            raise RuntimeError(
+                "Bluefoglite is not initialized. Forget to call bfl.init()?"
+            )
         buf = NumpyBuffer(self._agent.context, array)
         return buf
 
