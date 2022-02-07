@@ -50,7 +50,19 @@ def send(dst, obj_or_array, *, tag=0, group=None):
     group.send(dst=dst, obj_or_array=obj_or_array, tag=tag)
 
 
-def recv(src, obj_or_array=None, *, tag=0, group=None):
+def recv(src, obj_or_array, *, tag=0, group=None):
     if group is None:
         group = _global_group
     return group.recv(src=src, obj_or_array=obj_or_array, tag=tag)
+
+
+def broadcast(array, root_rank, *, tag=0, group=None):
+    if group is None:
+        group = _global_group
+    return group.broadcast(array=array, root_rank=root_rank)
+
+
+def allreduce(array, *, agg_op="AVG", tag=0, group=None):
+    if group is None:
+        group = _global_group
+    return group.allreduce(array=array, agg_op=agg_op)

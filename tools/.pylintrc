@@ -67,6 +67,7 @@ disable=
     invalid-name,
     missing-docstring,
     too-few-public-methods,
+    too-many-statements,
     unused-argument,
 
 

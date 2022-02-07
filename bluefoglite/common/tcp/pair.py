@@ -426,6 +426,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         end_pos = envelope.offset + envelope.nbytes
 
         Logger.get().debug("handle read envelope %s", envelope)
+        # See the comments in the _write function for the exception handling.
         while True:
             try:
                 # Should be ready to read
@@ -454,7 +455,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 Logger.get().debug("_read encountered %s", e)
                 if self.state == PairState.CLOSED:
                     break
-            except ConnectionError as e:
+            except BrokenPipeError as e:
                 # Other side pair closed the socket.
                 Logger.get().warning(
                     "Encountered when recv: %s. Likely, the other "
@@ -468,6 +469,13 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 self.changeState(PairState.CLOSED)
 
                 return
+            except ConnectionError as e:
+                Logger.get().warning(
+                    "Encountered when recv: %s. The connection is either refused"
+                    "or reset",
+                    e,
+                )
+                raise e
             else:
                 recv += num_bytes_recv  # type: ignore
 
@@ -499,6 +507,50 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         Logger.get().debug("handle write envelope %s", envelope)
         # TODO: make slot to send the message seperately and concurrently?
+
+        # From write(2) man page (NOTES section):
+        #
+        #  If a write() is interrupted by a signal handler before any
+        #  bytes are written, then the call fails with the error EINTR;
+        #  if it is interrupted after at least one byte has been written,
+        #  the call succeeds, and returns the number of bytes written.
+        #
+        # Starting from Python 3.3, errors related to socket or address
+        # semantics raise OSError or one of its subclasses.
+        #    +-- OSError
+        #    |    +-- BlockingIOError
+        #    |    +-- ChildProcessError
+        #    |    +-- ConnectionError
+        #    |    |    +-- BrokenPipeError
+        #    |    |    +-- ConnectionAbortedError
+        #    |    |    +-- ConnectionRefusedError
+        #    |    |    +-- ConnectionResetError
+        #    |    +-- InterruptedError
+        #
+        # exception BlockingIOError:
+        #    Raised when an operation would block on an object (e.g. socket)
+        #    set for non-blocking operation. Corresponds to errno EAGAIN,
+        #    EALREADY, EWOULDBLOCK and EINPROGRESS.
+        # exception BrokenPipeError
+        #    A subclass of ConnectionError, raised when trying to write on a
+        #    pipe while the other end has been closed, or trying to write on a
+        #    socket which has been shutdown for writing. Corresponds to errno
+        #    EPIPE and ESHUTDOWN.
+        # exception ConnectionAbortedError
+        #    A subclass of ConnectionError, raised when a connection attempt is
+        #    aborted by the peer. Corresponds to errno ECONNABORTED.
+        # exception ConnectionRefusedError
+        #    A subclass of ConnectionError, raised when a connection attempt is
+        #    refused by the peer. Corresponds to errno ECONNREFUSED.
+        # exception ConnectionResetError
+        #    A subclass of ConnectionError, raised when a connection is reset by the
+        #    peer. Corresponds to errno ECONNRESET.
+        # exception InterruptedError
+        #    Raised when a system call is interrupted by an incoming signal.
+        #    Corresponds to errno EINTR.
+        #    Changed in version 3.5: Python now retries system calls when a syscall
+        #    is interrupted by a signal, except if the signal handler raises an exception
+        #    (see PEP 475 for the rationale), instead of raising InterruptedError.
         while sent < envelope.nbytes + HEADER_LENGTH:
             try:
                 if sent < HEADER_LENGTH:
@@ -514,7 +566,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             except BlockingIOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
-            except ConnectionError as e:
+            except BrokenPipeError as e:
                 # Other side pair closed the socket.
                 Logger.get().warning(
                     "Encountered when recv: %s. Likely, the other "
@@ -527,6 +579,13 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 )
                 self.changeState(PairState.CLOSED)
                 return
+            except ConnectionError as e:
+                Logger.get().warning(
+                    "Encountered when recv: %s. The connection is either refused"
+                    "or reset",
+                    e,
+                )
+                raise e
             else:
                 sent += num_bytes_sent
         Logger.get().debug("handle write envelope done: %s", envelope)
