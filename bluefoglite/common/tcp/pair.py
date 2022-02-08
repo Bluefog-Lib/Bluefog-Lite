@@ -592,7 +592,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         envelope.buf.handleCompletion(envelope.handle)
 
     def send(  # pylint: disable=too-many-arguments
-        self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int
+        self, buf: Buffer, handle: int, nbytes: int, offset: int
     ) -> None:
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
@@ -606,7 +606,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             self._pending_send.append(envelope)
 
     def recv(  # pylint: disable=too-many-arguments
-        self, buf: Buffer, handle: int, nbytes: int, offset: int, slot: int
+        self, buf: Buffer, handle: int, nbytes: int, offset: int
     ) -> None:
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
