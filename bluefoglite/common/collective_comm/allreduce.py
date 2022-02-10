@@ -38,7 +38,9 @@ def allreduce_tree(
             buf.add_(tmp_buf)
 
     if context.rank == 0:
+        print(f"Before {buf.array}")
         buf.div_(context.size)
+        print(f"After {buf.array}")
 
     # Broadcast it in reverse away
     for r in range(rounds - 1, -1, -1):

@@ -56,13 +56,13 @@ def recv(src, obj_or_array, *, tag=0, group=None):
     return group.recv(src=src, obj_or_array=obj_or_array, tag=tag)
 
 
-def broadcast(array, root_rank, *, tag=0, group=None):
+def broadcast(array, root_rank, *, inplace=False, tag=0, group=None):
     if group is None:
         group = _global_group
-    return group.broadcast(array=array, root_rank=root_rank)
+    return group.broadcast(array=array, root_rank=root_rank, inplace=inplace)
 
 
-def allreduce(array, *, agg_op="AVG", tag=0, group=None):
+def allreduce(array, *, agg_op="AVG", inplace=False, tag=0, group=None):
     if group is None:
         group = _global_group
-    return group.allreduce(array=array, agg_op=agg_op)
+    return group.allreduce(array=array, agg_op=agg_op, inplace=inplace)

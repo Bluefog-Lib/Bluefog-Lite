@@ -103,8 +103,7 @@ class NumpyBuffer(SpecifiedBuffer):
         self.itemsize = array.itemsize
 
     def clone(self):
-        new_array = np.empty(self.shape, dtype=self.dtype)
-        return NumpyBuffer(self.context, new_array)
+        return NumpyBuffer(self.context, self.array.copy())
 
     # TODO: numerical ops should not be member function of Buffer.
     def add_(self, other_buf: "NumpyBuffer"):
