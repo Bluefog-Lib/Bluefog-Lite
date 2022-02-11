@@ -18,6 +18,7 @@ import json
 import os
 import pickle
 from typing import Any, Dict, Optional
+from concurrent.futures import Executor, Future, ThreadPoolExecutor
 
 import numpy as np  # type: ignore
 
@@ -52,6 +53,9 @@ class BlueFogLiteGroup:
 
         self._rank: Optional[int] = None
         self._size: Optional[int] = None
+        self._executor: Executor = ThreadPoolExecutor(
+            max_workers=const.MAX_THREAD_POOL_WORKER
+        )
 
     def init(self, store=None, rank: Optional[int] = None, size: Optional[int] = None):
         if store is None:
@@ -83,6 +87,7 @@ class BlueFogLiteGroup:
     def shutdown(self):
         if self._agent is not None:
             self._agent.close()
+        self._executor.shutdown()
 
     def rank(self) -> int:
         if self._rank is None:
@@ -143,20 +148,27 @@ class BlueFogLiteGroup:
 
     # TODO 1.Distinguish inplace versus not inplace change.
     # TODO 2. Add nonblocking version.
-    def broadcast(self, array: np.ndarray, root_rank: int):
+    def broadcast(
+        self, *, array: np.ndarray, root_rank: int, inplace: bool
+    ) -> np.ndarray:
         self._check_rank(root_rank)
         buf = self._prepare_numpy_buffer(array)
+        out_buf = buf if inplace else buf.clone()
 
         if self.size() <= 4:
-            broadcast_one_to_all(buf, root_rank, buf.context)
+            broadcast_one_to_all(out_buf, root_rank, out_buf.context)
         else:
-            broadcast_spreading(buf, root_rank, buf.context)
-        return buf.array
+            broadcast_spreading(out_buf, root_rank, out_buf.context)
+        return out_buf.array
 
-    def broadcast_nonblocking(self, array: np.ndarray, root_rank: int):
-        raise NotImplementedError
+    def broadcast_nonblocking(
+        self, *, array: np.ndarray, root_rank: int, inplace: bool
+    ) -> Future:
+        return self._executor.submit(
+            self.broadcast, array=array, root_rank=root_rank, inplace=inplace
+        )
 
-    def allreduce(self, array: np.ndarray, agg_op: str = "AVG"):
+    def allreduce(self, *, array: np.ndarray, agg_op: str, inplace: bool) -> np.ndarray:
         if agg_op == "AVG" and array.dtype not in [
             np.float16,
             np.float32,
@@ -176,9 +188,14 @@ class BlueFogLiteGroup:
                 array = array.astype(np.float64)
 
         buf = self._prepare_numpy_buffer(array)
+        out_buf = buf if inplace else buf.clone()
 
-        allreduce_tree(buf, buf.context, agg_op=agg_op)
-        return buf.array
+        allreduce_tree(out_buf, out_buf.context, agg_op=agg_op)
+        return out_buf.array
 
-    def allreduce_nonblocking(self, array: np.ndarray, agg_op: str = "AVG"):
-        raise NotImplementedError
+    def allreduce_nonblocking(
+        self, *, array: np.ndarray, agg_op: str, inplace: bool
+    ) -> Future:
+        return self._executor.submit(
+            self.allreduce, array=array, agg_op=agg_op, inplace=inplace
+        )

@@ -74,6 +74,7 @@ jobs:
     - name: Unit Test
       run: |
         timeout 3m pytest -s -vv bluefoglite test
+        timeout 3m bflrun -np 4 pytest -s -vv test/allreduce_broadcast.py
 
   macos-unit-test:
     
@@ -99,3 +100,4 @@ jobs:
     - name: Unit Test
       run: |
         timeout 3m pytest -s -vv bluefoglite test
+        timeout 3m bflrun -np 4 pytest -s -vv test/allreduce_broadcast.py

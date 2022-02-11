@@ -100,12 +100,12 @@ def test_send_recv_array(empty_address, array_list, reverse_send_recv):
         if rank == send_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
-            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
         elif rank == recv_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[1])
-            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
             np.testing.assert_allclose(array_list[1], array_list[0])
         pair.close()
@@ -138,12 +138,12 @@ def test_send_recv_array_multiple(empty_address, array_list):
         if rank == send_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
-            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
         elif rank == recv_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[1])
-            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
             np.testing.assert_allclose(array_list[1], array_list[0])
         pair.close()
@@ -179,12 +179,12 @@ def test_send_recv_obj(empty_address, reverse_send_recv):
         if rank == send_rank:
             handle = hm.allocate()
             buf = SpecifiedBuffer(MagicMock(), memoryview(data), len(data))
-            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
         elif rank == recv_rank:
             handle = hm.allocate()
             ubuf = UnspecifiedBuffer(MagicMock())
-            pair.recv(ubuf, handle, nbytes=-1, offset=0, slot=0)
+            pair.recv(ubuf, handle, nbytes=-1, offset=0)
             hm.wait(handle=handle)
             assert ubuf.data == data
         pair.close()
@@ -220,7 +220,7 @@ def test_send_after_peer_close(empty_address, array_list, reverse_send_recv):
             buf = _build_sbuf_from_array(array_list[0])
             time.sleep(0.5)  # wait to send
             try:
-                pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+                pair.send(buf, handle, nbytes=buf.buffer_length, offset=0)
                 hm.wait(handle=handle)
             except BlueFogLiteEventError:
                 # Encounter error: [Errno 32] Broken pipe
@@ -261,7 +261,7 @@ def test_close_before_send_finish(empty_address, array_list, reverse_send_recv, 
         if rank == send_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
-            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0)
             pair.close()
             # Close it withour wait sending.
             with caplog.at_level(logging.WARNING):
@@ -310,7 +310,7 @@ def test_close_before_recv_finish(empty_address, array_list, reverse_send_recv, 
         elif rank == recv_rank:
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
-            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0, slot=0)
+            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0)
             pair.close()
             # Close it without wait receiving.
             with caplog.at_level(logging.WARNING):

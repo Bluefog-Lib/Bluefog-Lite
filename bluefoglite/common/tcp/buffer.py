@@ -44,13 +44,11 @@ class Buffer(abc.ABC):
         self.hm.markDone(handle, event_status)
 
     @abc.abstractmethod
-    def irecv(
-        self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
-    ) -> int:
+    def irecv(self, src: int, *, nbytes: int = -1, offset: int = 0) -> int:
         return NotImplemented
 
     @abc.abstractmethod
-    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
+    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0):
         return NotImplemented
 
 
@@ -63,38 +61,34 @@ class SpecifiedBuffer(Buffer):
         self.buffer_view = buffer_view
         self.buffer_length = buffer_length
 
-    def isend(
-        self, dst: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
-    ) -> int:
+    def isend(self, dst: int, *, nbytes: int = -1, offset: int = 0) -> int:
         if nbytes == -1:
             nbytes = self.buffer_length
 
         handle = self.hm.allocate()
         # TODO: Make some verificaiton here
         self.context.getOrCreatePair(dst).send(
-            self, handle=handle, nbytes=nbytes, offset=offset, slot=slot
+            self, handle=handle, nbytes=nbytes, offset=offset
         )
         return handle
 
-    def irecv(
-        self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
-    ) -> int:
+    def irecv(self, src: int, *, nbytes: int = -1, offset: int = 0) -> int:
         if nbytes == -1:
             nbytes = self.buffer_length - offset
 
         handle = self.hm.allocate()
         # TODO Make some verificaiton here
         self.context.getOrCreatePair(src).recv(
-            self, handle=handle, nbytes=nbytes, offset=offset, slot=slot
+            self, handle=handle, nbytes=nbytes, offset=offset
         )
         return handle
 
-    def send(self, dst: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
-        handle = self.isend(dst, nbytes=nbytes, offset=offset, slot=slot)
+    def send(self, dst: int, *, nbytes: int = -1, offset: int = 0):
+        handle = self.isend(dst, nbytes=nbytes, offset=offset)
         self.waitCompletion(handle)
 
-    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
-        handle = self.irecv(src, nbytes=nbytes, offset=offset, slot=slot)
+    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0):
+        handle = self.irecv(src, nbytes=nbytes, offset=offset)
         self.waitCompletion(handle)
 
 
@@ -109,8 +103,7 @@ class NumpyBuffer(SpecifiedBuffer):
         self.itemsize = array.itemsize
 
     def clone(self):
-        new_array = np.empty(self.shape, dtype=self.dtype)
-        return NumpyBuffer(self.context, new_array)
+        return NumpyBuffer(self.context, self.array.copy())
 
     # TODO: numerical ops should not be member function of Buffer.
     def add_(self, other_buf: "NumpyBuffer"):
@@ -126,16 +119,12 @@ class UnspecifiedBuffer(Buffer):
         self.context = context
         self.data = b""
 
-    def irecv(
-        self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0
-    ) -> int:
+    def irecv(self, src: int, *, nbytes: int = -1, offset: int = 0) -> int:
         handle = self.hm.allocate()
         # TODO Make some verificaiton here
-        self.context.getOrCreatePair(src).recv(
-            self, handle=handle, nbytes=-1, offset=0, slot=0
-        )
+        self.context.getOrCreatePair(src).recv(self, handle=handle, nbytes=-1, offset=0)
         return handle
 
-    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0, slot: int = 0):
+    def recv(self, src: int, *, nbytes: int = -1, offset: int = 0):
         handle = self.irecv(src)
         self.waitCompletion(handle)

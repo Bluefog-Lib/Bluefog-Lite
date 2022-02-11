@@ -26,3 +26,5 @@ BFL_LOG_RANKS = "BFL_LOG_RANKS"
 # Constant
 BASE_PART = 18106  # Looks like 1BL[UEUF]OG
 EVENT_LOOP_TIMEOUT = 1  # Timeout param for event loop
+
+MAX_THREAD_POOL_WORKER = 4  # use in ThreadPoolExecutor
