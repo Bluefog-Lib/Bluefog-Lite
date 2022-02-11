@@ -617,3 +617,6 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 )
             envelope = Envelope(buf=buf, handle=handle, offset=offset, nbytes=nbytes)
             self._pending_recv.append(envelope)
+
+            # Should we call this immediately since we know it is ready?
+            # self.write()

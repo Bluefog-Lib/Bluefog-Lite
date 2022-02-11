@@ -13,6 +13,10 @@
 # limitations under the License.
 # ==============================================================================
 
+from typing import Any
+from concurrent.futures import Future
+import numpy as np  # type: ignore
+
 from bluefoglite.common.basics import BlueFogLiteGroup
 
 _global_group = BlueFogLiteGroup()
@@ -32,37 +36,74 @@ def shutdown(group=None):
     group.shutdown()
 
 
-def size(group=None):
+def size(group=None) -> int:
     if group is None:
         group = _global_group
     return group.size()
 
 
-def rank(group=None):
+def rank(group=None) -> int:
     if group is None:
         group = _global_group
     return group.rank()
 
 
-def send(dst, obj_or_array, *, tag=0, group=None):
+def send(dst, obj_or_array: Any, *, tag: int = 0, group=None):
     if group is None:
         group = _global_group
     group.send(dst=dst, obj_or_array=obj_or_array, tag=tag)
 
 
-def recv(src, obj_or_array, *, tag=0, group=None):
+def recv(src, obj_or_array: Any, *, tag: int = 0, group=None):
     if group is None:
         group = _global_group
     return group.recv(src=src, obj_or_array=obj_or_array, tag=tag)
 
 
-def broadcast(array, root_rank, *, inplace=False, tag=0, group=None):
+def broadcast(
+    array: np.ndarray,
+    root_rank: int,
+    *,
+    inplace: bool = False,
+    tag: bool = 0,
+    group=None
+):
     if group is None:
         group = _global_group
     return group.broadcast(array=array, root_rank=root_rank, inplace=inplace)
 
 
-def allreduce(array, *, agg_op="AVG", inplace=False, tag=0, group=None):
+def broadcast_nonblocking(
+    array: np.ndarray, root_rank: int, *, inplace=False, tag=0, group=None
+) -> Future:
+    if group is None:
+        group = _global_group
+    return group.broadcast_nonblocking(
+        array=array, root_rank=root_rank, inplace=inplace
+    )
+
+
+def allreduce(
+    array: np.ndarray,
+    *,
+    agg_op: str = "AVG",
+    inplace: bool = False,
+    tag: int = 0,
+    group=None
+):
     if group is None:
         group = _global_group
     return group.allreduce(array=array, agg_op=agg_op, inplace=inplace)
+
+
+def allreduce_nonblocking(
+    array: np.ndarray,
+    *,
+    agg_op: str = "AVG",
+    inplace: bool = False,
+    tag: int = 0,
+    group=None
+) -> Future:
+    if group is None:
+        group = _global_group
+    return group.allreduce_nonblocking(array=array, agg_op=agg_op, inplace=inplace)
