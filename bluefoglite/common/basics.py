@@ -53,6 +53,9 @@ class BlueFogLiteGroup:
 
         self._rank: Optional[int] = None
         self._size: Optional[int] = None
+        self._executor: Executor = ThreadPoolExecutor(
+            max_workers=const.MAX_THREAD_POOL_WORKER
+        )
 
     def init(self, store=None, rank: Optional[int] = None, size: Optional[int] = None):
         if store is None:
@@ -80,8 +83,6 @@ class BlueFogLiteGroup:
         self._agent = Agent()
         context = self._agent.createContext(rank=self._rank, size=self._size)
         context.connectFull(store=self._store)
-
-        self._executor: Executor = ThreadPoolExecutor(max_workers=4)
 
     def shutdown(self):
         if self._agent is not None:

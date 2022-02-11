@@ -65,7 +65,7 @@ def broadcast(
     root_rank: int,
     *,
     inplace: bool = False,
-    tag: bool = 0,
+    tag: int = 0,
     group=None
 ):
     if group is None:
