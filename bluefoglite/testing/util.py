@@ -1,7 +1,8 @@
-import os
 import multiprocessing
+import os
 import threading
 import time
+import traceback
 from typing import Callable, List
 
 from bluefoglite.common import const
@@ -21,7 +22,7 @@ def multi_thread_help(
             # os.environ[const.BFL_WORLD_SIZE] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:  # pylint: disable=broad-except
-            Logger.get().error(e)
+            Logger.get().error(traceback.format_exc())
             errors.append(e)
 
     thread_list = [
@@ -58,7 +59,7 @@ def multi_process_help(
             os.environ[const.BFL_WORLD_SIZE] = str(size)
             fn(rank=rank, size=size)
         except Exception as e:  # pylint: disable=broad-except
-            Logger.get().error(e)
+            Logger.get().error(traceback.format_exc())
             error_queue.put(e)
 
     process_list = [
