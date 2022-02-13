@@ -1,4 +1,6 @@
 import itertools
+import sys
+
 import numpy as np  # type: ignore
 import pytest  # type: ignore
 
@@ -14,6 +16,10 @@ def fixture_store_wrapper():
     yield from fixture_store(__name__)
 
 
+@pytest.mark.skipif(
+    sys.version_info[:2] == (3, 8) and sys.platform == "darwin",
+    reason="Python 3.8 in Mac can't pickle local object in multiprocess",
+)
 @pytest.mark.parametrize(
     "size,dtype,ndim",
     itertools.product([2, 3, 4, 6], [np.float32, np.float64, np.float128], [1, 2, 3]),
