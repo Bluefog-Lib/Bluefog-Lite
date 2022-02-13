@@ -477,7 +477,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 )
                 raise e
             else:
-                recv += num_bytes_recv  # type: ignore
+                recv += num_bytes_recv
 
             if len(header_bytes) >= HEADER_LENGTH:
                 header = _phrase_header(header_bytes)

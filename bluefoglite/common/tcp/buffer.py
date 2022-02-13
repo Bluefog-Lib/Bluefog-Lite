@@ -16,7 +16,7 @@
 
 import abc
 import threading
-from typing import Optional, TYPE_CHECKING, Union
+from typing import Optional, TYPE_CHECKING, Tuple, Union
 
 import numpy as np  # type: ignore
 
@@ -28,20 +28,23 @@ if TYPE_CHECKING:
 
 
 class Buffer(abc.ABC):
+    hm = HandleManager.getInstance()
+
     def __init__(self) -> None:
         self.data = b""
         self.buffer_view = memoryview(self.data)
         self.buffer_length = 0
         self.mutex = threading.Lock()
         self.cv = threading.Condition(self.mutex)
-        self.hm = HandleManager.getInstance()
 
-    def waitCompletion(self, handle: int, timeout=None):
-        assert self.hm.wait(handle=handle, timeout=timeout)
-        self.hm.release(handle=handle)
+    @classmethod
+    def waitCompletion(cls, handle: int, timeout=None):
+        assert cls.hm.wait(handle=handle, timeout=timeout)
+        cls.hm.release(handle=handle)
 
-    def handleCompletion(self, handle: int, event_status: Optional[EventStatus] = None):
-        self.hm.markDone(handle, event_status)
+    @classmethod
+    def handleCompletion(cls, handle: int, event_status: Optional[EventStatus] = None):
+        cls.hm.markDone(handle, event_status)
 
     @abc.abstractmethod
     def irecv(self, src: int, *, nbytes: int = -1, offset: int = 0) -> int:
@@ -60,6 +63,12 @@ class SpecifiedBuffer(Buffer):
         self.context = context
         self.buffer_view = buffer_view
         self.buffer_length = buffer_length
+        if self.buffer_view.format != "c":
+            raise ValueError("The memoryview of buffer should be in char format.")
+        if not self.buffer_view.contiguous:
+            raise ValueError(
+                "Only support the case that buffer_view has contiguous memeory."
+            )
 
     def isend(self, dst: int, *, nbytes: int = -1, offset: int = 0) -> int:
         if nbytes == -1:
@@ -94,13 +103,24 @@ class SpecifiedBuffer(Buffer):
 
 class NumpyBuffer(SpecifiedBuffer):
     def __init__(self, context: "AgentContext", array: np.ndarray) -> None:
-        super().__init__(context, array.data, array.nbytes)
+        # .cast("c") is crucial for the downstream function because
+        # everything index, slicing, etc will be operated in bytes only
+        # and ignore the original itemsize, stride, shape, etc.
+        super().__init__(context, array.data.cast("c"), array.nbytes)
 
         self.array = array  # Should not use it since it may change?
 
+        # The logical structure of NumPy-style arrays is defined by
+        #   itemsize, ndim, shape and strides.
         self.dtype = array.dtype
         self.shape = array.shape
         self.itemsize = array.itemsize
+
+    def create_new_buffer(self, shape: Tuple[int, ...]) -> "NumpyBuffer":
+        if any(s <= 0 for s in shape):
+            raise ValueError("shape should be the tuple with positive integer")
+        empty_array = np.zeros(shape, dtype=self.dtype)
+        return NumpyBuffer(self.context, array=empty_array)
 
     def clone(self):
         return NumpyBuffer(self.context, self.array.copy())
@@ -108,6 +128,9 @@ class NumpyBuffer(SpecifiedBuffer):
     # TODO: numerical ops should not be member function of Buffer.
     def add_(self, other_buf: "NumpyBuffer"):
         self.array += other_buf.array
+
+    def mul_(self, factor: Union[int, float]):
+        self.array *= factor
 
     def div_(self, factor: Union[int, float]):
         self.array /= factor
