@@ -30,10 +30,10 @@ jobs:
         python-version: '3.7'
     - name: Install pylint
       run: cat tools/requirements_dev.txt | grep "pylint\|astroid" | xargs pip install
-    - name: Display version
-      run: tools/lint.sh --version
-    - name: Format
-      run: tools/lint.sh
+    - name: Check
+      run: |
+        tools/lint.sh --version
+        tools/lint.sh
     
   mypy:
     name: mypy check
@@ -47,10 +47,11 @@ jobs:
         python-version: '3.7'
     - name: Install mypy
       run: cat tools/requirements_dev.txt | grep "protobuf\|mypy" | xargs pip install
-    - name: Display version
-      run: tools/mypy.sh --version
-    - name: Format
-      run: tools/mypy.sh
+    - name: Check
+      run: |
+        rm bluefoglite/common/tcp/message_pb2.py
+        tools/mypy.sh --version
+        tools/mypy.sh
 
   ubuntu-unit-test:
 
