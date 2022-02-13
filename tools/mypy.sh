@@ -3,4 +3,5 @@
 # Usage:  (under the root directory)
 #   tools/mypy.sh [--version]
 
-mypy --config-file=tools/.mypy.in "$@" bluefoglite
+files=$(find . -name "*.py" ! -name '*_pb2.py')
+mypy --config-file=tools/.mypy.in "$@" ${files}
