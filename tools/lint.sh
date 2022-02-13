@@ -14,5 +14,5 @@
 #   * (F) fatal, if an error occurred which prevented pylint from doing
 #   further processing.
 
-lint_files=$(find . -name "*.py" ! -name '*_pb2.py')
+lint_files=$(find bluefoglite -name "*.py" ! -name '*_pb2.py')
 pylint --rcfile=tools/.pylintrc "$@" ${lint_files}
