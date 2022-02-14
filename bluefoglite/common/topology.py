@@ -1,8 +1,8 @@
 import math
 from typing import Tuple, Optional
 
-import numpy as np
-import networkx as nx
+import numpy as np  # type:ignore
+import networkx as nx  # type:ignore
 
 
 def isPowerOf(x, base):
@@ -36,11 +36,11 @@ def ExponentialGraph(size: int, base: int = 2) -> nx.DiGraph:
             x.append(1.0)
         else:
             x.append(0.0)
-    x = np.array(x)
-    x /= x.sum()
+    x_a = np.array(x)
+    x_a /= x_a.sum()
     topo = np.empty((size, size))
     for i in range(size):
-        topo[i] = np.roll(x, i)
+        topo[i] = np.roll(x_a, i)
     G = nx.from_numpy_array(topo, create_using=nx.DiGraph)
     return G
 
