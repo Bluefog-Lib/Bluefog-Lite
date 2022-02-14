@@ -25,6 +25,7 @@ import numpy as np  # type: ignore
 from bluefoglite.common import const
 from bluefoglite.common.collective_comm import allreduce_tree
 from bluefoglite.common.collective_comm import broadcast_one_to_all, broadcast_spreading
+from bluefoglite.common.collective_comm import neighbor_allreduce
 from bluefoglite.common.logger import Logger
 from bluefoglite.common.tcp.agent import Agent
 from bluefoglite.common.tcp.buffer import (
@@ -44,6 +45,27 @@ def _json_decode(json_bytes: bytes, encoding: str) -> Dict:
     obj = json.load(tiow)
     tiow.close()
     return obj
+
+
+def _maybe_convert_to_numeric(array: np.ndarray, inplace=False) -> np.ndarray:
+    if array.dtype not in [np.float16, np.float32, np.float64, np.complex64]:
+        if inplace:
+            raise ValueError(
+                "Cannot do inplace averge in the allreduce when input array "
+                f"(dtype: {array.dtype})is not floating type."
+            )
+        Logger.get().warning(
+            "The operation with average reduce should call the array with floating datatype "
+            "but the provided one is %s. Auto-casting it.",
+            array.dtype,
+        )
+        if array.dtype in [np.int8, np.int16]:
+            array = array.astype(np.float16)
+        elif array.dtype == np.int32:
+            array = array.astype(np.float32)
+        else:
+            array = array.astype(np.float64)
+    return array
 
 
 class BlueFogLiteGroup:
@@ -169,24 +191,8 @@ class BlueFogLiteGroup:
         )
 
     def allreduce(self, *, array: np.ndarray, agg_op: str, inplace: bool) -> np.ndarray:
-        if agg_op == "AVG" and array.dtype not in [
-            np.float16,
-            np.float32,
-            np.float64,
-            np.complex64,
-        ]:
-            Logger.get().warning(
-                "allreduce with AVG should call the array with floating datatype "
-                "but the provided one is %s. Auto-casting it.",
-                array.dtype,
-            )
-            if array.dtype in [np.int8, np.int16]:
-                array = array.astype(np.float16)
-            elif array.dtype == np.int32:
-                array = array.astype(np.float32)
-            else:
-                array = array.astype(np.float64)
-
+        if agg_op == "AVG":
+            array = _maybe_convert_to_numeric(array, inplace=inplace)
         buf = self._prepare_numpy_buffer(array)
         out_buf = buf if inplace else buf.clone()
 
@@ -198,4 +204,42 @@ class BlueFogLiteGroup:
     ) -> Future:
         return self._executor.submit(
             self.allreduce, array=array, agg_op=agg_op, inplace=inplace
+        )
+
+    def neighbor_allreduce(
+        self,
+        *,
+        array: np.ndarray,
+        self_weight: float,
+        src_weights: Dict[int, float],
+        dst_weights: Dict[int, float],
+    ) -> np.ndarray:
+        # TODO 1. add topology to the class so that we can use default one.
+        # TODO 2. add topology check service
+        array = _maybe_convert_to_numeric(array, inplace=False)
+        in_buf = self._prepare_numpy_buffer(array)
+        out_buf = in_buf.clone()
+        neighbor_allreduce(
+            in_buf=in_buf,
+            out_buf=out_buf,
+            self_weight=self_weight,
+            src_weights=src_weights,
+            dst_weights=dst_weights,
+        )
+        return out_buf.array
+
+    def neighbor_allreduce_nonblocking(
+        self,
+        *,
+        array: np.ndarray,
+        self_weight: float,
+        src_weights: Dict[int, float],
+        dst_weights: Dict[int, float],
+    ) -> Future:
+        return self._executor.submit(
+            self.neighbor_allreduce,
+            array=array,
+            self_weight=self_weight,
+            src_weights=src_weights,
+            dst_weights=dst_weights,
         )
