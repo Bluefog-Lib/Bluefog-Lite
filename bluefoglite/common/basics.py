@@ -20,7 +20,6 @@ import os
 import pickle
 from typing import Any, Dict, Optional
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
-from bluefoglite.common import topology
 
 import networkx as nx  # type: ignore
 import numpy as np  # type: ignore
@@ -160,7 +159,7 @@ class BlueFogLiteGroup:
             topology, self.rank()
         )
         _default_dst_weights = {
-            r: 1 for r in topology.successors(self.rank()) if r != self.rank()
+            int(r): 1.0 for r in topology.successors(self.rank()) if r != self.rank()
         }
         self._topology_and_weights = TopologyAndWeights(
             topology=topology.copy(),
