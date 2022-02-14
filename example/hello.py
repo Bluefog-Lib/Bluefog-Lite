@@ -1,11 +1,9 @@
-import os
 import time
 
 import bluefoglite as bfl
 import numpy as np  # type: ignore
 
 bfl.init()
-# print(f"{bfl.rank()}: init done")
 print(f"I am rank {bfl.rank()} among size {bfl.size()}.")
 
 if bfl.rank() == 0:
@@ -17,7 +15,7 @@ elif bfl.rank() == 1:
     print("recv data:", recv_data)
 else:
     pass
-time.sleep(0.5)
+time.sleep(0.1)
 
 if bfl.rank() == 0:
     data = {"x": [1, 2], "y": "s"}
@@ -27,6 +25,6 @@ elif bfl.rank() == 1:
     print("recv data:", recv_data)
 else:
     pass
-time.sleep(0.5)
+time.sleep(0.1)
 
 bfl.shutdown()

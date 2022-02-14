@@ -17,14 +17,15 @@ import itertools
 import threading
 import time
 
-from bluefoglite.common.handle_manager import HandleManager, EventStatus
 import pytest  # type: ignore
+
+from bluefoglite.common.handle_manager import HandleManager
 
 
 @pytest.mark.parametrize("num_thread,incr", itertools.product([2, 4, 6], [3, 40, 5]))
 def test_handle_manager_allocate(num_thread, incr):
     hm = HandleManager.getInstance()
-    hm._reset()
+    hm._reset()  # pylint: disable=protected-access
 
     def allocate(incr):
         prev_handle = -1
@@ -47,13 +48,13 @@ def test_handle_manager_allocate(num_thread, incr):
         t.join()
 
     assert hm.last_handle == num_thread * incr - 1
-    hm._reset()
+    hm._reset()  # pylint: disable=protected-access
 
 
 @pytest.mark.parametrize("sleep_time", [0.5, 1, 1.5])
 def test_handle_manager_wait(sleep_time):
     hm = HandleManager.getInstance()
-    hm._reset()
+    hm._reset()  # pylint: disable=protected-access
 
     def allocate_markdone():
         hm = HandleManager.getInstance()
@@ -80,7 +81,7 @@ def test_handle_manager_wait_timeout():
     sleep_time = 1.0
     timeout_time = 0.5
     hm = HandleManager.getInstance()
-    hm._reset()
+    hm._reset()  # pylint: disable=protected-access
 
     def allocate_markdone():
         hm = HandleManager.getInstance()
@@ -93,6 +94,6 @@ def test_handle_manager_wait_timeout():
     t.start()
 
     hm = HandleManager.getInstance()
-    assert hm.wait(handle=hm.last_handle, timeout=timeout_time) == False
+    assert not hm.wait(handle=hm.last_handle, timeout=timeout_time)
 
     t.join()

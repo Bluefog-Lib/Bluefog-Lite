@@ -13,8 +13,10 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Any, Dict
 from concurrent.futures import Future
+from typing import Any, Dict, Optional
+
+import networkx as nx  # type: ignore
 import numpy as np  # type: ignore
 
 from bluefoglite.common.basics import BlueFogLiteGroup
@@ -58,6 +60,12 @@ def recv(src, obj_or_array: Any, *, tag: int = 0, group=None):
     if group is None:
         group = _global_group
     return group.recv(src=src, obj_or_array=obj_or_array, tag=tag)
+
+
+def set_topology(topology: nx.DiGraph, *, group=None):
+    if group is None:
+        group = _global_group
+    return group.set_topology(topology=topology)
 
 
 def broadcast(
@@ -112,9 +120,9 @@ def allreduce_nonblocking(
 def neighbor_allreduce(
     array: np.ndarray,
     *,
-    self_weight: float,
-    src_weights: Dict[int, float],
-    dst_weights: Dict[int, float],
+    self_weight: Optional[float] = None,
+    src_weights: Optional[Dict[int, float]] = None,
+    dst_weights: Optional[Dict[int, float]] = None,
     group=None
 ) -> np.ndarray:
     if group is None:
@@ -130,9 +138,9 @@ def neighbor_allreduce(
 def neighbor_allreduce_nonblocking(
     array: np.ndarray,
     *,
-    self_weight: float,
-    src_weights: Dict[int, float],
-    dst_weights: Dict[int, float],
+    self_weight: Optional[float] = None,
+    src_weights: Optional[Dict[int, float]] = None,
+    dst_weights: Optional[Dict[int, float]] = None,
     group=None
 ) -> Future:
     if group is None:
