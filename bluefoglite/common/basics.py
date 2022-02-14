@@ -13,13 +13,16 @@
 # limitations under the License.
 # ==============================================================================
 
+import dataclasses
 import io
 import json
 import os
 import pickle
 from typing import Any, Dict, Optional
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
+from bluefoglite.common import topology
 
+import networkx as nx  # type: ignore
 import numpy as np  # type: ignore
 
 from bluefoglite.common import const
@@ -34,6 +37,7 @@ from bluefoglite.common.tcp.buffer import (
     UnspecifiedBuffer,
 )
 from bluefoglite.common.store import FileStore
+from bluefoglite.common.topology import GetRecvWeights
 
 
 def _json_encode(obj: Any, encoding: str) -> bytes:
@@ -68,6 +72,14 @@ def _maybe_convert_to_numeric(array: np.ndarray, inplace=False) -> np.ndarray:
     return array
 
 
+@dataclasses.dataclass
+class TopologyAndWeights:
+    topology: nx.DiGraph
+    default_self_weight: float
+    default_src_weights: Dict[int, float]
+    default_dst_weights: Dict[int, float]
+
+
 class BlueFogLiteGroup:
     def __init__(self) -> None:
         self._agent: Optional[Agent] = None
@@ -78,6 +90,7 @@ class BlueFogLiteGroup:
         self._executor: Executor = ThreadPoolExecutor(
             max_workers=const.MAX_THREAD_POOL_WORKER
         )
+        self._topology_and_weights: Optional[TopologyAndWeights] = None
 
     def init(self, store=None, rank: Optional[int] = None, size: Optional[int] = None):
         if store is None:
@@ -126,6 +139,36 @@ class BlueFogLiteGroup:
         assert isinstance(rank, int), error_msg
         assert rank >= 0, error_msg
         assert rank < self.size(), error_msg
+
+    def set_topology(self, topology: nx.DiGraph) -> bool:
+        """A function that sets the virtual topology MPI used.
+
+        Args:
+          Topo: A networkx.DiGraph object to decide the topology.
+
+        Returns:
+            A boolean value that whether topology is set correctly or not.
+        """
+        if not isinstance(topology, nx.DiGraph):
+            raise TypeError("topology must be a networkx.DiGraph obejct.")
+        if topology.number_of_nodes() != self.size():
+            raise TypeError(
+                "topology must be a networkx.DiGraph obejct with same number of "
+                "nodes as bfl.size()."
+            )
+        _default_self_weight, _default_src_weights = GetRecvWeights(
+            topology, self.rank()
+        )
+        _default_dst_weights = {
+            r: 1 for r in topology.successors(self.rank()) if r != self.rank()
+        }
+        self._topology_and_weights = TopologyAndWeights(
+            topology=topology.copy(),
+            default_self_weight=_default_self_weight,
+            default_src_weights=_default_src_weights,
+            default_dst_weights=_default_dst_weights,
+        )
+        return True
 
     def send(self, dst, obj_or_array, tag=0):
         self._check_rank(dst)
@@ -210,12 +253,27 @@ class BlueFogLiteGroup:
         self,
         *,
         array: np.ndarray,
-        self_weight: float,
-        src_weights: Dict[int, float],
-        dst_weights: Dict[int, float],
+        self_weight: Optional[float],
+        src_weights: Optional[Dict[int, float]],
+        dst_weights: Optional[Dict[int, float]],
     ) -> np.ndarray:
-        # TODO 1. add topology to the class so that we can use default one.
-        # TODO 2. add topology check service
+        # TODO 1. add topology check service.
+        if (
+            self_weight is None
+            and src_weights is None
+            and dst_weights is None
+            and (self._topology_and_weights is not None)
+        ):
+            self_weight = self._topology_and_weights.default_self_weight
+            src_weights = self._topology_and_weights.default_src_weights
+            dst_weights = self._topology_and_weights.default_dst_weights
+
+        if self_weight is None or src_weights is None or dst_weights is None:
+            raise ValueError(
+                "Must provide all self_weight, src_weights, and dst_weights "
+                "arguments or set static topology."
+            )
+
         array = _maybe_convert_to_numeric(array, inplace=False)
         in_buf = self._prepare_numpy_buffer(array)
         out_buf = in_buf.clone()

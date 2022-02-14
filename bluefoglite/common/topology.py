@@ -1,8 +1,34 @@
 import math
-from typing import Tuple, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np  # type:ignore
 import networkx as nx  # type:ignore
+
+
+def GetRecvWeights(topo: nx.DiGraph, rank: int) -> Tuple[float, Dict[int, float]]:
+    """Return a Tuple of self_weight and neighbor_weights for receiving dictionary."""
+    weight_matrix = nx.to_numpy_array(topo)
+    self_weight = 0.0
+    neighbor_weights = {}
+    for src_rank in topo.predecessors(rank):
+        if src_rank == rank:
+            self_weight = weight_matrix[src_rank, rank]
+        else:
+            neighbor_weights[src_rank] = weight_matrix[src_rank, rank]
+    return self_weight, neighbor_weights
+
+
+def GetSendWeights(topo: nx.DiGraph, rank: int) -> Tuple[float, Dict[int, float]]:
+    """Return a Tuple of self_weight and neighbor_weights for sending dictionary."""
+    weight_matrix = nx.to_numpy_array(topo)
+    self_weight = 0.0
+    neighbor_weights = {}
+    for recv_rank in topo.successors(rank):
+        if recv_rank == rank:
+            self_weight = weight_matrix[rank, recv_rank]
+        else:
+            neighbor_weights[recv_rank] = weight_matrix[rank, recv_rank]
+    return self_weight, neighbor_weights
 
 
 def isPowerOf(x, base):
