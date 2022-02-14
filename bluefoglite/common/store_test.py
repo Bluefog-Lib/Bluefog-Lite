@@ -17,12 +17,12 @@ import atexit
 import datetime
 import os
 import time
-import threading
+
+import pytest  # type: ignore
 
 from bluefoglite.common.store import InMemoryStore, FileStore
 from bluefoglite.testing.util import multi_thread_help
 
-import pytest  # type: ignore
 
 runtime_str = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
 shared_file_dir = os.path.join("/tmp", ".bluefoglite", __name__, runtime_str)
