@@ -75,7 +75,7 @@ def test_connect(empty_address):
 
 def _build_sbuf_from_array(array):
     mock_context = MagicMock()
-    return SpecifiedBuffer(mock_context, array.data, array.nbytes)
+    return SpecifiedBuffer(mock_context, array.data.cast("c"), array.nbytes)
 
 
 @pytest.mark.parametrize("reverse_send_recv", [True, False])
@@ -178,7 +178,7 @@ def test_send_recv_obj(empty_address, reverse_send_recv):
         data = b"jisdnoldf"
         if rank == send_rank:
             handle = hm.allocate()
-            buf = SpecifiedBuffer(MagicMock(), memoryview(data), len(data))
+            buf = SpecifiedBuffer(MagicMock(), memoryview(data).cast("c"), len(data))
             pair.send(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
         elif rank == recv_rank:

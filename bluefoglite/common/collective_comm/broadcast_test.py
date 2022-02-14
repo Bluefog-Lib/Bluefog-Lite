@@ -33,7 +33,7 @@ def test_broadcast_one_to_all(store, size):
         context = agent.createContext(rank=rank, size=size)
         context.connectFull(store)
         buf = SpecifiedBuffer(
-            context, buffer_view=array.data, buffer_length=array.nbytes
+            context, buffer_view=array.data.cast("c"), buffer_length=array.nbytes
         )
         broadcast_one_to_all(buf=buf, root_rank=root_rank, context=context)
         np.testing.assert_allclose(array, np.array(range(dim)) + root_rank)
@@ -60,7 +60,7 @@ def test_broadcast_ring(store, size):
         context = agent.createContext(rank=rank, size=size)
         context.connectRing(store)
         buf = SpecifiedBuffer(
-            context, buffer_view=array.data, buffer_length=array.nbytes
+            context, buffer_view=array.data.cast("c"), buffer_length=array.nbytes
         )
         broadcast_ring(buf=buf, root_rank=root_rank, context=context)
         np.testing.assert_allclose(array, np.array(range(dim)) + root_rank)
@@ -92,7 +92,7 @@ def test_broadcast_spreading(store, size):
         context = agent.createContext(rank=rank, size=size)
         context.connectFull(store)
         buf = SpecifiedBuffer(
-            context, buffer_view=array.data, buffer_length=array.nbytes
+            context, buffer_view=array.data.cast("c"), buffer_length=array.nbytes
         )
         broadcast_spreading(buf=buf, root_rank=root_rank, context=context)
         np.testing.assert_allclose(array, np.array(range(dim)) + root_rank)

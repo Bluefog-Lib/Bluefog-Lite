@@ -62,6 +62,7 @@ confidence=
 # --disable=W".
 disable=
     bad-continuation,
+    duplicate-code,
     fixme,
     import-error,
     invalid-name,

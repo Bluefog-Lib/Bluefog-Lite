@@ -18,7 +18,7 @@ args=()
 if (( only_print == 1 )); then
     args+=("--check" "--diff")
 fi
-format_files=$(find . -name "*.py")
+format_files=$(find . -name "*.py" ! -name '*_pb2.py')
 
 echo "$(black --version)"
 LOGS="$(black "${args[@]}" ${format_files} 2>&1)"

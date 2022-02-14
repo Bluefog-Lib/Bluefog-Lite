@@ -45,7 +45,7 @@ def test_connect_ring(size):
         raise e
 
 
-@pytest.mark.parametrize("size", [1, 2, 3, 5, 9])
+@pytest.mark.parametrize("size", [1, 2, 3, 5, 8])
 def test_connect_full(size):
     store = InMemoryStore()
 

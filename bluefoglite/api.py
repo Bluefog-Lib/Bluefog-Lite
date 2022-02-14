@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Any
+from typing import Any, Dict
 from concurrent.futures import Future
 import numpy as np  # type: ignore
 
@@ -107,3 +107,39 @@ def allreduce_nonblocking(
     if group is None:
         group = _global_group
     return group.allreduce_nonblocking(array=array, agg_op=agg_op, inplace=inplace)
+
+
+def neighbor_allreduce(
+    array: np.ndarray,
+    *,
+    self_weight: float,
+    src_weights: Dict[int, float],
+    dst_weights: Dict[int, float],
+    group=None
+) -> np.ndarray:
+    if group is None:
+        group = _global_group
+    return group.neighbor_allreduce(
+        array=array,
+        self_weight=self_weight,
+        src_weights=src_weights,
+        dst_weights=dst_weights,
+    )
+
+
+def neighbor_allreduce_nonblocking(
+    array: np.ndarray,
+    *,
+    self_weight: float,
+    src_weights: Dict[int, float],
+    dst_weights: Dict[int, float],
+    group=None
+) -> Future:
+    if group is None:
+        group = _global_group
+    return group.neighbor_allreduce_nonblocking(
+        array=array,
+        self_weight=self_weight,
+        src_weights=src_weights,
+        dst_weights=dst_weights,
+    )

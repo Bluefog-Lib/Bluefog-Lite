@@ -1,0 +1,29 @@
+// Generate the derived python file by running the command
+//   protoc -I=bluefoglite/common/tcp/ --python_out=bluefoglite/common/tcp/ \
+//   bluefoglite/common/tcp/message.proto
+
+syntax = "proto2";
+
+package bluefoglite;
+
+enum dtype {
+  BFL_UINT8 = 0;
+  BFL_INT8 = 1;
+  BFL_UINT16 = 2;
+  BFL_INT16 = 3;
+  BFL_INT32 = 4;
+  BFL_INT64 = 5;
+  BFL_FLOAT16 = 6;
+  BFL_FLOAT32 = 7;
+  BFL_FLOAT64 = 8;
+  BFL_BOOL = 9;
+  BFL_BYTE = 10;
+}
+
+message Header {
+  optional int64 content_length = 1;
+  optional int32 tag = 2;
+  optional int32 ndim = 3;
+  repeated int32 shape = 4;
+  optional dtype dtype = 5;
+}

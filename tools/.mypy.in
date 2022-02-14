@@ -1,1 +1,2 @@
 [mypy]
+exclude = bluefoglite/common/tcp/message_pb2.py
