@@ -1,5 +1,8 @@
 # BlueFogLite
 
+![ci_badge](https://github.com/Bluefog-Lib/Bluefog-Lite/actions/workflows/ci.yml/badge.svg)
+![Liscense](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+
 BlueFogLite is a lite implementation of BlueFog functionality using pure python implementation
 without mandotary MPI or NCCL dependency.
 
