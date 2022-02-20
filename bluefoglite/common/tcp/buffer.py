@@ -18,7 +18,7 @@ import abc
 import threading
 from typing import Optional, TYPE_CHECKING, Tuple, Union
 
-import numpy as np  # type: ignore
+import numpy as np
 
 from bluefoglite.common.handle_manager import HandleManager, EventStatus
 

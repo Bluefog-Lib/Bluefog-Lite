@@ -18,7 +18,7 @@ import datetime
 import os
 import time
 
-import pytest  # type: ignore
+import pytest
 
 from bluefoglite.common.store import InMemoryStore, FileStore
 from bluefoglite.testing.util import multi_thread_help

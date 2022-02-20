@@ -18,8 +18,8 @@ import socket
 import time
 from unittest.mock import MagicMock
 
-import numpy as np  # type: ignore
-import pytest  # type: ignore
+import numpy as np
+import pytest
 
 from bluefoglite import BlueFogLiteEventError
 

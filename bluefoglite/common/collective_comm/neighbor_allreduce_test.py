@@ -1,8 +1,8 @@
 import itertools
 import sys
 
-import numpy as np  # type: ignore
-import pytest  # type: ignore
+import numpy as np
+import pytest
 
 from bluefoglite.common.collective_comm.neighbor_allreduce import neighbor_allreduce
 from bluefoglite.common.tcp.buffer import NumpyBuffer

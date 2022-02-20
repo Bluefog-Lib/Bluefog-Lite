@@ -1,8 +1,8 @@
 import math
 from typing import Dict, Optional, Tuple
 
-import numpy as np  # type:ignore
-import networkx as nx  # type:ignore
+import numpy as np
+import networkx as nx
 
 
 def GetRecvWeights(topo: nx.DiGraph, rank: int) -> Tuple[float, Dict[int, float]]:

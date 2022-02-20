@@ -1,4 +1,4 @@
-from bluefoglite.common.tcp import message_pb2  # type: ignore
+from bluefoglite.common.tcp import message_pb2
 
 
 def test_serialize():

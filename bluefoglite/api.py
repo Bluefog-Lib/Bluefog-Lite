@@ -16,8 +16,8 @@
 from concurrent.futures import Future
 from typing import Any, Dict, Optional
 
-import networkx as nx  # type: ignore
-import numpy as np  # type: ignore
+import networkx as nx
+import numpy as np
 
 from bluefoglite.common.basics import BlueFogLiteGroup
 

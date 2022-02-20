@@ -21,8 +21,8 @@ import pickle
 from typing import Any, Dict, Optional
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 
-import networkx as nx  # type: ignore
-import numpy as np  # type: ignore
+import networkx as nx
+import numpy as np
 
 from bluefoglite.common import const
 from bluefoglite.common.collective_comm import allreduce_tree

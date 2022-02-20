@@ -14,7 +14,7 @@
 # ==============================================================================
 import logging
 import os
-import pytest  # type: ignore
+import pytest
 
 from bluefoglite.common import const
 from bluefoglite.common.logger import Logger
