@@ -117,7 +117,7 @@ def main():
     while any(p_ctx.poll() is None for p_ctx in p_ctx_list):
         try:
             [p_ctx.wait(timeout=timeout) for p_ctx in p_ctx_list]
-        except Exception as e:  # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             traceback.print_exc()
             _maybe_kill_process(pid_list)
             break
