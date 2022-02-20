@@ -15,11 +15,12 @@
 
 import argparse
 import atexit
+from datetime import datetime
 import glob
 import os
 import signal
 import subprocess
-from datetime import datetime
+import traceback
 
 import bluefoglite as bfl
 
@@ -111,11 +112,13 @@ def main():
 
     signal.signal(signal.SIGINT, handler)
     atexit.register(_maybe_kill_process, pid_list)
+    timeout = 15
 
     while any(p_ctx.poll() is None for p_ctx in p_ctx_list):
         try:
-            [p_ctx.wait(timeout=15) for p_ctx in p_ctx_list]
-        except:  # pylint: disable=bare-except
+            [p_ctx.wait(timeout=timeout) for p_ctx in p_ctx_list]
+        except Exception as e:  # pylint: disable=bare-except
+            traceback.print_exc()
             _maybe_kill_process(pid_list)
             break
 
