@@ -2,7 +2,7 @@ import itertools
 from typing import Dict
 
 
-import numpy as np  # type:ignore
+import numpy as np
 
 from bluefoglite.common.tcp.buffer import Buffer, NumpyBuffer
 

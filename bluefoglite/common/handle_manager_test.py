@@ -17,7 +17,7 @@ import itertools
 import threading
 import time
 
-import pytest  # type: ignore
+import pytest
 
 from bluefoglite.common.handle_manager import HandleManager
 

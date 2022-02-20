@@ -1,6 +1,6 @@
 import math
 from unittest.mock import MagicMock, patch
-import pytest  # type: ignore
+import pytest
 
 from bluefoglite.common.store import InMemoryStore
 from bluefoglite.common.tcp.agent import AgentContext

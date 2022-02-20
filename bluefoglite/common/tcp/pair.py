@@ -438,13 +438,13 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 if header is not None:
                     if envelope.nbytes != -1:
                         start_pos = envelope.offset + recv - HEADER_LENGTH
-                        max_recv = min(2048, end_pos - start_pos)
+                        max_recv = min(404800, end_pos - start_pos)
                         num_bytes_recv = self.sock.recv_into(
                             envelope.buf.buffer_view[start_pos:end_pos], max_recv
                         )
                     else:
                         # unspecified buffer.
-                        _data = self.sock.recv(2048)
+                        _data = self.sock.recv(404800)
                         num_bytes_recv = len(_data)
                         envelope.buf.data += _data
                 else:

@@ -1,6 +1,5 @@
 import bluefoglite as bfl
-import numpy as np  # type: ignore
-import pytest  # type: ignore
+import numpy as np
 
 
 def setup_module(module):

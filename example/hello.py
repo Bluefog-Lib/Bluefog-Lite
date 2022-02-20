@@ -1,7 +1,7 @@
 import time
 
 import bluefoglite as bfl
-import numpy as np  # type: ignore
+import numpy as np
 
 bfl.init()
 print(f"I am rank {bfl.rank()} among size {bfl.size()}.")
