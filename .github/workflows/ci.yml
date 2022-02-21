@@ -46,9 +46,10 @@ jobs:
       with:
         python-version: '3.7'
     - name: Install mypy
-      run: cat tools/requirements_dev.txt | grep "protobuf\|mypy" | xargs pip install
+      run: cat tools/requirements_dev.txt | grep "mypy" | xargs pip install
     - name: Check
       run: |
+        rm bluefoglite/common/tcp/message_pb2.py
         tools/mypy.sh --version
         tools/mypy.sh
 

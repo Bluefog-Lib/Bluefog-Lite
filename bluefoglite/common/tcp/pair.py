@@ -13,7 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from ast import Bytes
 import dataclasses
 import collections
 import copy
