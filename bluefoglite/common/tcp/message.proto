@@ -6,7 +6,7 @@ syntax = "proto2";
 
 package bluefoglite;
 
-enum dtype {
+enum DType {
   BFL_UINT8 = 0;
   BFL_INT8 = 1;
   BFL_UINT16 = 2;
@@ -16,8 +16,9 @@ enum dtype {
   BFL_FLOAT16 = 6;
   BFL_FLOAT32 = 7;
   BFL_FLOAT64 = 8;
-  BFL_BOOL = 9;
-  BFL_BYTE = 10;
+  BFL_FLOAT128 = 9;
+  BFL_BOOL = 10;
+  BFL_BYTE = 11;
 }
 
 message Header {
@@ -25,5 +26,6 @@ message Header {
   optional int32 tag = 2;
   optional int32 ndim = 3;
   repeated int32 shape = 4;
-  optional dtype dtype = 5;
+  optional DType dtype = 5;
+  optional int32 itemsize = 6;
 }

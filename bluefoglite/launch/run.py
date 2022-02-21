@@ -112,11 +112,13 @@ def main():
 
     signal.signal(signal.SIGINT, handler)
     atexit.register(_maybe_kill_process, pid_list)
-    timeout = 15
+    timeout = 2
 
     while any(p_ctx.poll() is None for p_ctx in p_ctx_list):
         try:
             [p_ctx.wait(timeout=timeout) for p_ctx in p_ctx_list]
+        except subprocess.TimeoutExpired:
+            pass
         except:  # pylint: disable=bare-except
             traceback.print_exc()
             _maybe_kill_process(pid_list)

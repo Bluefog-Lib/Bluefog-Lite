@@ -15,10 +15,10 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\x12\x0b\x62luefoglite\"m\n\x06Header\x12\x16\n\x0e\x63ontent_length\x18\x01 \x01(\x03\x12\x0b\n\x03tag\x18\x02 \x01(\x05\x12\x0c\n\x04ndim\x18\x03 \x01(\x05\x12\r\n\x05shape\x18\x04 \x03(\x05\x12!\n\x05\x64type\x18\x05 \x01(\x0e\x32\x12.bluefoglite.dtype*\xb0\x01\n\x05\x64type\x12\r\n\tBFL_UINT8\x10\x00\x12\x0c\n\x08\x42\x46L_INT8\x10\x01\x12\x0e\n\nBFL_UINT16\x10\x02\x12\r\n\tBFL_INT16\x10\x03\x12\r\n\tBFL_INT32\x10\x04\x12\r\n\tBFL_INT64\x10\x05\x12\x0f\n\x0b\x42\x46L_FLOAT16\x10\x06\x12\x0f\n\x0b\x42\x46L_FLOAT32\x10\x07\x12\x0f\n\x0b\x42\x46L_FLOAT64\x10\x08\x12\x0c\n\x08\x42\x46L_BOOL\x10\t\x12\x0c\n\x08\x42\x46L_BYTE\x10\n')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rmessage.proto\x12\x0b\x62luefoglite\"\x7f\n\x06Header\x12\x16\n\x0e\x63ontent_length\x18\x01 \x01(\x03\x12\x0b\n\x03tag\x18\x02 \x01(\x05\x12\x0c\n\x04ndim\x18\x03 \x01(\x05\x12\r\n\x05shape\x18\x04 \x03(\x05\x12!\n\x05\x64type\x18\x05 \x01(\x0e\x32\x12.bluefoglite.DType\x12\x10\n\x08itemsize\x18\x06 \x01(\x05*\xc2\x01\n\x05\x44Type\x12\r\n\tBFL_UINT8\x10\x00\x12\x0c\n\x08\x42\x46L_INT8\x10\x01\x12\x0e\n\nBFL_UINT16\x10\x02\x12\r\n\tBFL_INT16\x10\x03\x12\r\n\tBFL_INT32\x10\x04\x12\r\n\tBFL_INT64\x10\x05\x12\x0f\n\x0b\x42\x46L_FLOAT16\x10\x06\x12\x0f\n\x0b\x42\x46L_FLOAT32\x10\x07\x12\x0f\n\x0b\x42\x46L_FLOAT64\x10\x08\x12\x10\n\x0c\x42\x46L_FLOAT128\x10\t\x12\x0c\n\x08\x42\x46L_BOOL\x10\n\x12\x0c\n\x08\x42\x46L_BYTE\x10\x0b')
 
-_DTYPE = DESCRIPTOR.enum_types_by_name['dtype']
-dtype = enum_type_wrapper.EnumTypeWrapper(_DTYPE)
+_DTYPE = DESCRIPTOR.enum_types_by_name['DType']
+DType = enum_type_wrapper.EnumTypeWrapper(_DTYPE)
 BFL_UINT8 = 0
 BFL_INT8 = 1
 BFL_UINT16 = 2
@@ -28,8 +28,9 @@ BFL_INT64 = 5
 BFL_FLOAT16 = 6
 BFL_FLOAT32 = 7
 BFL_FLOAT64 = 8
-BFL_BOOL = 9
-BFL_BYTE = 10
+BFL_FLOAT128 = 9
+BFL_BOOL = 10
+BFL_BYTE = 11
 
 
 _HEADER = DESCRIPTOR.message_types_by_name['Header']
@@ -43,8 +44,8 @@ _sym_db.RegisterMessage(Header)
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _DTYPE._serialized_start=142
-  _DTYPE._serialized_end=318
+  _DTYPE._serialized_start=160
+  _DTYPE._serialized_end=354
   _HEADER._serialized_start=30
-  _HEADER._serialized_end=139
+  _HEADER._serialized_end=157
 # @@protoc_insertion_point(module_scope)

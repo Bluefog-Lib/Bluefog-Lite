@@ -27,7 +27,6 @@ for dim in dims:
         x_avg = torch.Tensor([(bfl.size() - 1) / 2] * dim).double()
 
     mse = [((x - x_avg) * (x - x_avg)).sum()]
-    raise ValueError
     # print(f"{bfl.rank()}: before {x}")
     start = time.time()
     for _ in range(100):

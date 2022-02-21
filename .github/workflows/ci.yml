@@ -49,7 +49,6 @@ jobs:
       run: cat tools/requirements_dev.txt | grep "protobuf\|mypy" | xargs pip install
     - name: Check
       run: |
-        rm bluefoglite/common/tcp/message_pb2.py
         tools/mypy.sh --version
         tools/mypy.sh
 

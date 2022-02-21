@@ -21,13 +21,14 @@ from typing import Optional, TYPE_CHECKING, Tuple, Union
 import numpy as np
 
 from bluefoglite.common.handle_manager import HandleManager, EventStatus
+from bluefoglite.common.util import numpy_to_bfl_dtype, bfl_to_numpy_dtype, TDtype
 
 if TYPE_CHECKING:
     # pylint: disable=cyclic-import
     from bluefoglite.common.tcp.agent import AgentContext
 
 
-class Buffer(abc.ABC):
+class Buffer(abc.ABC):  # pylint: disable=too-many-instance-attributes
     hm = HandleManager.getInstance()
 
     def __init__(self) -> None:
@@ -36,6 +37,12 @@ class Buffer(abc.ABC):
         self.buffer_length = 0
         self.mutex = threading.Lock()
         self.cv = threading.Condition(self.mutex)
+
+        # Only exists when we use numpy or similar style array
+        self.shape: Optional[Tuple[int, ...]] = None
+        self.ndim: Optional[int] = None
+        self.dtype: Optional[TDtype] = None
+        self.itemsize: Optional[int] = None
 
     @classmethod
     def waitCompletion(cls, handle: int, timeout=None):
@@ -112,14 +119,15 @@ class NumpyBuffer(SpecifiedBuffer):
 
         # The logical structure of NumPy-style arrays is defined by
         #   itemsize, ndim, shape and strides.
-        self.dtype = array.dtype
-        self.shape = array.shape
+        self.shape: Tuple[int, ...] = array.shape
         self.itemsize = array.itemsize
+        self.ndim = array.ndim
+        self.dtype = numpy_to_bfl_dtype(array.dtype)
 
     def create_new_buffer(self, shape: Tuple[int, ...]) -> "NumpyBuffer":
         if any(s <= 0 for s in shape):
             raise ValueError("shape should be the tuple with positive integer")
-        empty_array = np.zeros(shape, dtype=self.dtype)
+        empty_array = np.zeros(shape, dtype=bfl_to_numpy_dtype(self.dtype))
         return NumpyBuffer(self.context, array=empty_array)
 
     def clone(self):
