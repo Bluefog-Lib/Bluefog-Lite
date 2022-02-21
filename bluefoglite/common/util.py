@@ -16,7 +16,7 @@
 from typing import Optional
 import numpy as np
 
-from bluefoglite.common.tcp import message_pb2
+from bluefoglite.common.tcp import message_pb2  # type: ignore
 
 
 TDtype = int  # int because protobuf encode Enum as integer number

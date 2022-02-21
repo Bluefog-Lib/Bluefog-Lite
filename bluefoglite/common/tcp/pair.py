@@ -23,7 +23,7 @@ import struct
 import threading
 from typing import Any, Deque, Optional, Tuple, Union
 
-from bluefoglite.common.tcp import message_pb2
+from bluefoglite.common.tcp import message_pb2  # type: ignore
 from bluefoglite.common.tcp.buffer import Buffer, TDtype
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
 from bluefoglite.common.handle_manager import (
