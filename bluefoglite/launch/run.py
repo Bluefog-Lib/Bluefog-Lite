@@ -21,6 +21,7 @@ import os
 import signal
 import subprocess
 import traceback
+import sys
 
 import bluefoglite as bfl
 
@@ -82,7 +83,7 @@ def main():
 
     if args.version:
         print(bfl.__version__)
-        exit(0)
+        sys.exit(0)
 
     p_ctx_list, pid_list = [], []
     runtime_str = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
