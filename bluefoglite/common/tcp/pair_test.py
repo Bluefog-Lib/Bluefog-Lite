@@ -94,7 +94,7 @@ def test_header_with_nbytes_only(nbytes):
     )
     encoded_bytes = _create_pb2_header(envelope=envelope)
     ret_header = _phrase_pb2_header(encoded_bytes)
-    assert len(bytes) == 9
+    assert len(encoded_bytes) == 9
     assert ret_header == message_pb2.Header(
         content_length=nbytes,
     )
