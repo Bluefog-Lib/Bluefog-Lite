@@ -23,6 +23,8 @@ import struct
 import threading
 from typing import Any, Deque, Optional, Tuple, Union
 
+import numpy as np
+
 from bluefoglite.common.tcp import message_pb2  # type: ignore
 from bluefoglite.common.tcp.buffer import Buffer, TDtype
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
@@ -84,17 +86,21 @@ class MessageType(enum.Enum):
 
 
 @dataclasses.dataclass
-class Envelope:
+class Envelope:  # pylint: disable=too-many-instance-attributes
     buf: Buffer
     handle: int
-    # Byte offset to read from/write to and byte count.
-    offset: int = 0
-    nbytes: int = 0
+    # Byte offset to read from/write to and byte count w.r.t local buffer
+    # it is not used for remote buffer.
+    offset: int
+    nbytes: int
     # Only exists when we use numpy or similar style array
-    shape: Optional[Tuple[int, ...]] = None
     ndim: Optional[int] = None
     dtype: Optional[TDtype] = None
     itemsize: Optional[int] = None
+    num_elements: Optional[int] = None
+    # TODO(ybc) We don't populate the shape because it will make
+    # the size of protobuf unknown.
+    shape: Optional[Tuple[int, ...]] = None
 
 
 # Fix length-header
@@ -122,16 +128,25 @@ def _phrase_header(head_bytes) -> Header:
 
 def _create_pb2_header(envelope: Envelope) -> bytes:
     """create a message with http style header."""
-    if envelope.nbytes < 0:
+    if envelope.nbytes is None or envelope.nbytes < 0:
         raise ValueError("The nbytpes to send can not be negative.")
-    header = message_pb2.Header(content_length=envelope.nbytes)
+    header = message_pb2.Header(
+        content_length=envelope.nbytes,
+        ndim=envelope.ndim,
+        dtype=envelope.dtype,
+        itemsize=envelope.itemsize,
+        num_elements=envelope.num_elements,
+        # Do not support with shape yet due to varying envelope size.
+        # shape = envelope.shape
+    )
     return header.SerializeToString()
 
 
 def _phrase_pb2_header(head_bytes: bytes):
     # return Header._make(struct.unpack(HEADER_FORMAT, head_bytes))
     header = message_pb2.Header()
-    return header.ParseFromString(head_bytes)
+    header.ParseFromString(head_bytes)
+    return header
 
 
 class Pair(Handler):  # pylint: disable=too-many-instance-attributes
@@ -632,6 +647,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 ndim=buf.ndim,
                 itemsize=buf.itemsize,
                 dtype=buf.dtype,
+                num_elements=np.prod(buf.shape),
             )
             self._pending_send.append(envelope)
 
@@ -655,6 +671,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 ndim=buf.ndim,
                 itemsize=buf.itemsize,
                 dtype=buf.dtype,
+                num_elements=np.prod(buf.shape),
             )
             self._pending_recv.append(envelope)
 

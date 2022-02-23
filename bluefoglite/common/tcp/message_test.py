@@ -4,11 +4,11 @@ from bluefoglite.common.tcp import message_pb2  # type: ignore
 def test_serialize():
     h = message_pb2.Header(
         content_length=100,
-        tag=0,
         ndim=3,
         shape=[3, 4, 5],
         dtype=message_pb2.BFL_FLOAT64,
         itemsize=8,
+        num_elements=3 * 4 * 5,
     )
     h_bytes = h.SerializeToString()
     h2 = message_pb2.Header()
@@ -23,6 +23,7 @@ def test_none_input():
         shape=None,
         dtype=None,
         itemsize=None,
+        num_elements=None,
     )
     h2 = message_pb2.Header(content_length=100)
     # Protobuf will use the default value.
@@ -31,5 +32,6 @@ def test_none_input():
     assert h.shape == []
     assert h.dtype == 0
     assert h.itemsize == 0
+    assert h.num_elements == 0
 
     assert h == h2

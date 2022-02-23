@@ -22,10 +22,13 @@ enum DType {
 }
 
 message Header {
-  optional int64 content_length = 1;
-  optional int32 tag = 2;
-  optional int32 ndim = 3;
-  repeated int32 shape = 4;
-  optional DType dtype = 5;
-  optional int32 itemsize = 6;
+  // We use the fixed length instead of more efficient Varint
+  // is to make sure the length of header are fixed.
+  // See https://developers.google.com/protocol-buffers/docs/encoding.
+  optional fixed64 content_length = 1;
+  optional fixed32 ndim = 2;
+  optional DType dtype = 3;
+  optional fixed32 itemsize = 4;
+  optional fixed64 num_elements = 5;
+  repeated int32 shape = 6;
 }
