@@ -101,7 +101,7 @@ class BlueFogLiteGroup:
                 )
             self._store = FileStore(_file_store_loc)
         else:
-            store = store
+            self._store = store
 
         _world_rank_env = os.getenv(const.BFL_WORLD_RANK)
         _world_size_env = os.getenv(const.BFL_WORLD_SIZE)

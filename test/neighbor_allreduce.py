@@ -18,8 +18,8 @@ def test_neighbor_allreduce_exp2():
 
     num_indegree = int(np.ceil(np.log2(size)))
     uniform_weight = 1 / (num_indegree + 1)
-    src_neighbor_ranks = [(rank - 2 ** i) % size for i in range(num_indegree)]
-    dst_neighbor_ranks = [(rank + 2 ** i) % size for i in range(num_indegree)]
+    src_neighbor_ranks = [(rank - 2**i) % size for i in range(num_indegree)]
+    dst_neighbor_ranks = [(rank + 2**i) % size for i in range(num_indegree)]
 
     sum_value = np.sum(src_neighbor_ranks) + rank
     dst_weights = {r: 1 for r in dst_neighbor_ranks}
