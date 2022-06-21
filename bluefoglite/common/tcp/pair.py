@@ -36,7 +36,7 @@ from bluefoglite.common.handle_manager import (
 from bluefoglite.common.logger import Logger
 
 
-MAX_ONE_TIME_RECV_BYTES = 2 ** 20
+MAX_ONE_TIME_RECV_BYTES = 2**20
 
 # ENCODED_HEADER_LENGTH is value determined by proto file, which should be consistent.
 ENCODED_HEADER_LENGTH = 11
@@ -116,7 +116,7 @@ HEADER_LENGTH = 8  # must make sure it align with header format
 def _create_header(envelope: Envelope) -> bytes:
     """create a message with http style header."""
     assert envelope.nbytes > 0
-    if envelope.nbytes >= 2 ** 32:
+    if envelope.nbytes >= 2**32:
         raise ValueError(
             "Don't support to send message length in bytes " f"larger than {2**32}"
         )
