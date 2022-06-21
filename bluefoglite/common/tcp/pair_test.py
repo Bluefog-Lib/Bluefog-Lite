@@ -29,6 +29,7 @@ from bluefoglite.common.store import InMemoryStore
 from bluefoglite.common.tcp import message_pb2  # type: ignore
 from bluefoglite.common.tcp.buffer import SpecifiedBuffer, UnspecifiedBuffer
 from bluefoglite.common.tcp.eventloop import EventLoop
+import bluefoglite.common.tcp.pair as pair_module
 from bluefoglite.common.tcp.pair import Envelope, Pair, SocketFullAddress
 from bluefoglite.common.tcp.pair import _create_pb2_header, _phrase_pb2_header
 from bluefoglite.testing.util import multi_thread_help
@@ -63,6 +64,7 @@ def test_header(nbytes, dtype):
     envelope = Envelope(
         buf=None,  # we do use them here.
         handle=None,
+        message_type=message_pb2.NOTIFY_RECV_READY,
         offset=0,
         nbytes=nbytes,
         ndim=2,
@@ -73,15 +75,21 @@ def test_header(nbytes, dtype):
     )
     encoded_bytes = _create_pb2_header(envelope=envelope)
     ret_header = _phrase_pb2_header(encoded_bytes)
-    assert len(encoded_bytes) == 30  # we want to make sure this size is unchanged.
+
+    # We do not support creating the header with other details yet. In _create_pb2_header, they
+    # are simply discarded. Hence, the length is st
+    assert len(encoded_bytes) == pair_module.ENCODED_HEADER_LENGTH
 
     # pylint: disable=no-member
     assert ret_header.content_length == nbytes
-    assert ret_header.ndim == 2
-    assert ret_header.itemsize == 8
-    assert ret_header.dtype == dtype
-    assert ret_header.num_elements == 12
-    assert ret_header.shape == []  # since we don't populate it.
+    assert ret_header.message_type == message_pb2.NOTIFY_RECV_READY
+
+    # TODO we don't populate it the,
+    # assert ret_header.ndim == 2
+    # assert ret_header.itemsize == 8
+    # assert ret_header.dtype == dtype
+    # assert ret_header.num_elements == 12
+    # assert ret_header.shape == []
 
 
 @pytest.mark.parametrize("nbytes", [1, 123, 12345, 123456, 123456789])
@@ -89,14 +97,16 @@ def test_header_with_nbytes_only(nbytes):
     envelope = Envelope(
         buf=None,  # we do use them here.
         handle=None,
+        message_type=message_pb2.NOTIFY_SEND_READY,
         offset=0,
         nbytes=nbytes,
     )
     encoded_bytes = _create_pb2_header(envelope=envelope)
     ret_header = _phrase_pb2_header(encoded_bytes)
-    assert len(encoded_bytes) == 9
+    assert len(encoded_bytes) == pair_module.ENCODED_HEADER_LENGTH
     assert ret_header == message_pb2.Header(
         content_length=nbytes,
+        message_type=message_pb2.NOTIFY_SEND_READY,
     )
 
 
