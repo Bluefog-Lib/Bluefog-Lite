@@ -21,6 +21,7 @@ import os
 import signal
 import subprocess
 import traceback
+import sys
 
 import bluefoglite as bfl
 
@@ -82,7 +83,7 @@ def main():
 
     if args.version:
         print(bfl.__version__)
-        exit(0)
+        sys.exit(0)
 
     p_ctx_list, pid_list = [], []
     runtime_str = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
@@ -112,11 +113,13 @@ def main():
 
     signal.signal(signal.SIGINT, handler)
     atexit.register(_maybe_kill_process, pid_list)
-    timeout = 15
+    timeout = 2
 
     while any(p_ctx.poll() is None for p_ctx in p_ctx_list):
         try:
             [p_ctx.wait(timeout=timeout) for p_ctx in p_ctx_list]
+        except subprocess.TimeoutExpired:
+            pass
         except:  # pylint: disable=bare-except
             traceback.print_exc()
             _maybe_kill_process(pid_list)

@@ -27,16 +27,15 @@ for dim in dims:
         x_avg = torch.Tensor([(bfl.size() - 1) / 2] * dim).double()
 
     mse = [((x - x_avg) * (x - x_avg)).sum()]
-    raise ValueError
     # print(f"{bfl.rank()}: before {x}")
-    start = time.time()
+    start = time.perf_counter()
     for _ in range(100):
         x = bfl.neighbor_allreduce(x)
         # mse.append(np.linalg.norm(x - x_avg))
     # print(f"{bfl.rank()}: after {x}")
-    duration = time.time() - start
+    duration = time.perf_counter() - start
     if bfl.rank() == 0:
         print(f"dim: {dim} -- duration: {duration}")
     durations.append(duration)
-
+    np.testing.assert_allclose(x, x_avg)
 bfl.shutdown()

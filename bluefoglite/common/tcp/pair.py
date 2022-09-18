@@ -21,9 +21,12 @@ import selectors
 import socket
 import struct
 import threading
-from typing import Any, Deque, Tuple, Optional, Union
+from typing import Any, Deque, Optional, Tuple, Union
 
-from bluefoglite.common.tcp.buffer import Buffer
+import numpy as np
+
+from bluefoglite.common.tcp import message_pb2  # type: ignore
+from bluefoglite.common.tcp.buffer import Buffer, TDtype
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
 from bluefoglite.common.handle_manager import (
     BlueFogLiteEventError,
@@ -31,6 +34,14 @@ from bluefoglite.common.handle_manager import (
     EventStatusEnum,
 )
 from bluefoglite.common.logger import Logger
+
+
+MAX_ONE_TIME_RECV_BYTES = 2**20
+
+# ENCODED_HEADER_LENGTH is value determined by proto file, which should be consistent.
+ENCODED_HEADER_LENGTH = 11
+# It includes the ndim, itemsize, dtype, information, etc. We haven't used that yet!
+ENCODED_HEADER_LENGTH_WITH_DETAILS = 32
 
 # Addresses can be either tuples of varying lengths (AF_INET, AF_INET6,
 # AF_NETLINK, AF_TIPC) or strings (AF_UNIX).
@@ -66,29 +77,6 @@ class SocketFullAddress:
         )
 
 
-# Fix length-header
-Header = collections.namedtuple("Header", ["tag", "content_length"])
-# >iI means big-endian Int (4) + unsigned Int (4)
-HEADER_FORMAT = ">iI"
-HEADER_LENGTH = 8  # must make sure it align with header format
-
-
-def _create_header(nbytes: int, tag: int = 0) -> bytes:
-    """create a message with http style header."""
-    assert nbytes > 0
-    if nbytes >= 2 ** 32:
-        raise ValueError(
-            "Don't support to send message length in bytes " f"larger than {2**32}"
-        )
-    header = Header(tag=tag, content_length=nbytes)
-    header_bytes = struct.pack(HEADER_FORMAT, *header)
-    return header_bytes
-
-
-def _phrase_header(head_bytes) -> Header:
-    return Header._make(struct.unpack(HEADER_FORMAT, head_bytes))
-
-
 class PairState(enum.Enum):
     UNKNOWN = 0
     INITIALIZING = 1
@@ -98,20 +86,72 @@ class PairState(enum.Enum):
     CLOSED = 5
 
 
-class MessageType(enum.Enum):
-    SEND_BUFFER = 0
-    RECV_BUFFER = 1
-    NOTIFY_SEND_READY = 2
-    NOTIFY_RECV_READY = 3
-
-
 @dataclasses.dataclass
-class Envelope:
+class Envelope:  # pylint: disable=too-many-instance-attributes
+    message_type: Any  # it is message_pb2.MessageType enum
     buf: Buffer
     handle: int
-    # Byte offset to read from/write to and byte count.
-    offset: int = 0
-    nbytes: int = 0
+    # Byte offset to read from/write to and byte count w.r.t local buffer
+    # it is not used for remote buffer.
+    offset: int
+    nbytes: int
+
+    # TODO(ybc) We don't populate the shape because it will make
+    # the size of protobuf unknown.
+    # Only exists when we use numpy or similar style array
+    ndim: Optional[int] = None
+    dtype: Optional[TDtype] = None
+    itemsize: Optional[int] = None
+    num_elements: Optional[int] = None
+    shape: Optional[Tuple[int, ...]] = None
+
+
+# Fix length-header
+Header = collections.namedtuple("Header", ["tag", "content_length"])
+# >iI means big-endian Int (4) + unsigned Int (4)
+HEADER_FORMAT = ">iI"
+HEADER_LENGTH = 8  # must make sure it align with header format
+
+
+def _create_header(envelope: Envelope) -> bytes:
+    """create a message with http style header."""
+    assert envelope.nbytes > 0
+    if envelope.nbytes >= 2**32:
+        raise ValueError(
+            "Don't support to send message length in bytes " f"larger than {2**32}"
+        )
+    header = Header(tag=0, content_length=envelope.nbytes)
+    header_bytes = struct.pack(HEADER_FORMAT, *header)
+    return header_bytes
+
+
+def _phrase_header(head_bytes) -> Header:
+    return Header._make(struct.unpack(HEADER_FORMAT, head_bytes))
+
+
+def _create_pb2_header(envelope: Envelope) -> bytes:
+    """create a message with http style header."""
+    if envelope.nbytes is None or envelope.nbytes < 0:
+        raise ValueError("The nbytpes to send can not be negative.")
+    header = message_pb2.Header(
+        message_type=envelope.message_type,
+        content_length=envelope.nbytes,
+        # Other details. Not used yet:
+        # ndim=envelope.ndim,
+        # dtype=envelope.dtype,
+        # itemsize=envelope.itemsize,
+        # num_elements=envelope.num_elements,
+        #
+        # Do not support with shape yet due to varying envelope size:
+        # shape = envelope.shape
+    )
+    return header.SerializeToString()
+
+
+def _phrase_pb2_header(head_bytes: bytes):
+    header = message_pb2.Header()
+    header.ParseFromString(head_bytes)
+    return header
 
 
 class Pair(Handler):  # pylint: disable=too-many-instance-attributes
@@ -430,21 +470,21 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         while True:
             try:
                 # Should be ready to read
-                if recv < HEADER_LENGTH:
-                    _header = self.sock.recv(HEADER_LENGTH - recv)
+                if recv < ENCODED_HEADER_LENGTH:
+                    _header = self.sock.recv(ENCODED_HEADER_LENGTH - recv)
                     recv += len(_header)
                     header_bytes += _header
 
                 if header is not None:
                     if envelope.nbytes != -1:
-                        start_pos = envelope.offset + recv - HEADER_LENGTH
-                        max_recv = min(404800, end_pos - start_pos)
+                        start_pos = envelope.offset + recv - ENCODED_HEADER_LENGTH
+                        max_recv = min(MAX_ONE_TIME_RECV_BYTES, end_pos - start_pos)
                         num_bytes_recv = self.sock.recv_into(
                             envelope.buf.buffer_view[start_pos:end_pos], max_recv
                         )
                     else:
                         # unspecified buffer.
-                        _data = self.sock.recv(404800)
+                        _data = self.sock.recv(MAX_ONE_TIME_RECV_BYTES)
                         num_bytes_recv = len(_data)
                         envelope.buf.data += _data
                 else:
@@ -479,20 +519,24 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             else:
                 recv += num_bytes_recv
 
-            if len(header_bytes) >= HEADER_LENGTH:
-                header = _phrase_header(header_bytes)
+            if len(header_bytes) >= ENCODED_HEADER_LENGTH:
+                header = _phrase_pb2_header(header_bytes)
                 if envelope.nbytes == -1:
                     # Unspecified buffer so no check.
                     pass
-                elif header.content_length > envelope.nbytes:
+                elif (
+                    header.content_length > envelope.nbytes  # pylint: disable=no-member
+                ):
                     raise BufferError(
                         "Recv Buffer size should be equal or "
                         "larger than the sending one."
                     )
 
             if header is not None:
-                content_len = header.content_length
-                if recv - HEADER_LENGTH >= content_len:
+                if (
+                    recv - ENCODED_HEADER_LENGTH
+                    >= header.content_length  # pylint: disable=no-member
+                ):
                     break
 
         Logger.get().debug("handle read envelope done: %s", envelope)
@@ -501,12 +545,12 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     def _write(self, envelope: Envelope) -> None:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
-        header = _create_header(envelope.nbytes)
+        # header = _create_header(envelope)
+        header = _create_pb2_header(envelope)
         end_pos = envelope.offset + envelope.nbytes
         sent = 0  # number of bytes sent
 
         Logger.get().debug("handle write envelope %s", envelope)
-        # TODO: make slot to send the message seperately and concurrently?
 
         # From write(2) man page (NOTES section):
         #
@@ -551,16 +595,16 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         #    Changed in version 3.5: Python now retries system calls when a syscall
         #    is interrupted by a signal, except if the signal handler raises an exception
         #    (see PEP 475 for the rationale), instead of raising InterruptedError.
-        while sent < envelope.nbytes + HEADER_LENGTH:
+        while sent < envelope.nbytes + ENCODED_HEADER_LENGTH:
             try:
-                if sent < HEADER_LENGTH:
+                if sent < ENCODED_HEADER_LENGTH:
                     # send header
                     num_bytes_sent = self.sock.send(header[sent:])
                     sent += num_bytes_sent
 
-                if sent >= HEADER_LENGTH:
+                if sent >= ENCODED_HEADER_LENGTH:
                     # send content
-                    start_pos = envelope.offset + sent - HEADER_LENGTH
+                    start_pos = envelope.offset + sent - ENCODED_HEADER_LENGTH
                     to_send_bytes = envelope.buf.buffer_view[start_pos:end_pos]
                     num_bytes_sent = self.sock.send(to_send_bytes)
             except BlockingIOError:
@@ -602,7 +646,19 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     "before calling the send."
                 )
 
-            envelope = Envelope(buf=buf, handle=handle, offset=offset, nbytes=nbytes)
+            envelope = Envelope(
+                message_type=message_pb2.SEND_BUFFER,
+                buf=buf,
+                handle=handle,
+                offset=offset,
+                nbytes=nbytes,
+                # Numpy-style only
+                shape=buf.shape,
+                ndim=buf.ndim,
+                itemsize=buf.itemsize,
+                dtype=buf.dtype,
+                num_elements=np.prod(buf.shape),
+            )
             self._pending_send.append(envelope)
 
     def recv(  # pylint: disable=too-many-arguments
@@ -615,7 +671,19 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     "The pair socket must be in the CONNECTED state "
                     "before calling the recv."
                 )
-            envelope = Envelope(buf=buf, handle=handle, offset=offset, nbytes=nbytes)
+            envelope = Envelope(
+                message_type=message_pb2.RECV_BUFFER,
+                buf=buf,
+                handle=handle,
+                offset=offset,
+                nbytes=nbytes,
+                # Numpy-style only
+                shape=buf.shape,
+                ndim=buf.ndim,
+                itemsize=buf.itemsize,
+                dtype=buf.dtype,
+                num_elements=np.prod(buf.shape),
+            )
             self._pending_recv.append(envelope)
 
             # Should we call this immediately since we know it is ready?

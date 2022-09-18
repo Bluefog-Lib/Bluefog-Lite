@@ -4,6 +4,7 @@ from typing import Dict
 
 import numpy as np
 
+from bluefoglite.common.util import bfl_to_numpy_dtype
 from bluefoglite.common.tcp.buffer import Buffer, NumpyBuffer
 
 
@@ -47,12 +48,15 @@ def neighbor_allreduce(  # pylint: disable=too-many-locals
     # Be careful that we want to overwrite the memory that buffer_view pointed to
     # not to change the object buffer_view reference. [:] is necessary here.
     out_buf.buffer_view[:] = (in_buf.array * self_weight).data.cast("c")
-    self_array = np.frombuffer(out_buf.buffer_view[:nbytes], dtype=out_buf.dtype)
+    self_array = np.frombuffer(
+        out_buf.buffer_view[:nbytes], dtype=bfl_to_numpy_dtype(out_buf.dtype)
+    )
     for i, rank in enumerate(sorted(src_weights.keys())):
         weight = src_weights[rank]
         offset = i * nbytes
         neighbor_tmp_array = np.frombuffer(
-            tmp_buf.buffer_view[offset : offset + nbytes], dtype=out_buf.dtype
+            tmp_buf.buffer_view[offset : offset + nbytes],
+            dtype=bfl_to_numpy_dtype(out_buf.dtype),
         )
         self_array += neighbor_tmp_array * weight
 

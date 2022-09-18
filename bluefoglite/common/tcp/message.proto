@@ -6,7 +6,15 @@ syntax = "proto2";
 
 package bluefoglite;
 
-enum dtype {
+enum MessageType {
+  UNKNOWN = 0;
+  SEND_BUFFER = 1;
+  RECV_BUFFER = 2;
+  NOTIFY_SEND_READY = 3;
+  NOTIFY_RECV_READY = 4;
+}
+
+enum DType {
   BFL_UINT8 = 0;
   BFL_INT8 = 1;
   BFL_UINT16 = 2;
@@ -16,14 +24,22 @@ enum dtype {
   BFL_FLOAT16 = 6;
   BFL_FLOAT32 = 7;
   BFL_FLOAT64 = 8;
-  BFL_BOOL = 9;
-  BFL_BYTE = 10;
+  BFL_FLOAT128 = 9;
+  BFL_BOOL = 10;
+  BFL_BYTE = 11;
 }
 
 message Header {
-  optional int64 content_length = 1;
-  optional int32 tag = 2;
-  optional int32 ndim = 3;
-  repeated int32 shape = 4;
-  optional dtype dtype = 5;
+  // We use the fixed length instead of more efficient Varint
+  // is to make sure the length of header are fixed.
+  // See https://developers.google.com/protocol-buffers/docs/encoding.
+  optional fixed64 content_length = 1;
+  optional MessageType message_type = 2;
+
+  // Extra details
+  optional fixed32 ndim = 3;
+  optional DType dtype = 4;
+  optional fixed32 itemsize = 5;
+  optional fixed64 num_elements = 6;
+  repeated int32 shape = 7;
 }

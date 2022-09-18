@@ -29,7 +29,7 @@ def test_neighbor_allreduce_ring(store, size, dtype, ndim):
 
     def nar(rank, size):
         agent = Agent()
-        array = np.array(range(dim ** ndim), dtype=dtype).reshape([dim] * ndim) + rank
+        array = np.array(range(dim**ndim), dtype=dtype).reshape([dim] * ndim) + rank
         context = agent.createContext(rank=rank, size=size)
         context.connectFull(store)
         in_buf = NumpyBuffer(context, array=array)
@@ -46,7 +46,7 @@ def test_neighbor_allreduce_ring(store, size, dtype, ndim):
             dst_weights=dst_weights,
         )
         expected_array = (
-            np.array(range(dim ** ndim), dtype=dtype).reshape([dim] * ndim)
+            np.array(range(dim**ndim), dtype=dtype).reshape([dim] * ndim)
             + (r_r + rank) / 2
         )
         np.testing.assert_allclose(out_buf.array, expected_array)
@@ -70,7 +70,7 @@ def test_neighbor_allreduce_exp(store, size, dtype, ndim):
 
     def nar(rank, size):
         agent = Agent()
-        array = np.array(range(dim ** ndim), dtype=dtype).reshape([dim] * ndim) + rank
+        array = np.array(range(dim**ndim), dtype=dtype).reshape([dim] * ndim) + rank
         context = agent.createContext(rank=rank, size=size)
         context.connectFull(store)
         in_buf = NumpyBuffer(context, array=array)
@@ -79,8 +79,8 @@ def test_neighbor_allreduce_exp(store, size, dtype, ndim):
         # Exponential 2 topology
         num_indegree = int(np.ceil(np.log2(size)))
         uniform_weight = 1 / (num_indegree + 1)
-        src_neighbor_ranks = [(rank - 2 ** i) % size for i in range(num_indegree)]
-        dst_neighbor_ranks = [(rank + 2 ** i) % size for i in range(num_indegree)]
+        src_neighbor_ranks = [(rank - 2**i) % size for i in range(num_indegree)]
+        dst_neighbor_ranks = [(rank + 2**i) % size for i in range(num_indegree)]
         sum_value = np.sum(src_neighbor_ranks) + rank
         dst_weights = {r: 1 for r in dst_neighbor_ranks}
         src_weights = {r: uniform_weight for r in src_neighbor_ranks}
@@ -93,7 +93,7 @@ def test_neighbor_allreduce_exp(store, size, dtype, ndim):
             dst_weights=dst_weights,
         )
         expected_array = (
-            np.array(range(dim ** ndim), dtype=dtype).reshape([dim] * ndim)
+            np.array(range(dim**ndim), dtype=dtype).reshape([dim] * ndim)
             + sum_value * uniform_weight
         )
         np.testing.assert_allclose(
