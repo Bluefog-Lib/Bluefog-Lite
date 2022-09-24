@@ -129,7 +129,7 @@ def _phrase_header(head_bytes) -> Header:
     return Header._make(struct.unpack(HEADER_FORMAT, head_bytes))
 
 
-def _create_pb2_header(envelope: Envelope) -> bytes:
+def _create_pb2_header(envelope: Envelope) -> message_pb2.Header:
     """create a message with http style header."""
     if envelope.nbytes is None or envelope.nbytes < 0:
         raise ValueError("The nbytpes to send can not be negative.")
@@ -145,7 +145,7 @@ def _create_pb2_header(envelope: Envelope) -> bytes:
         # Do not support with shape yet due to varying envelope size:
         # shape = envelope.shape
     )
-    return header.SerializeToString()
+    return header
 
 
 def _phrase_pb2_header(head_bytes: bytes):
@@ -174,19 +174,17 @@ class ReadStatus:
             return num_bytes_to_read, header_view
 
         if self.header is None and self.nbytes == ENCODED_HEADER_LENGTH:
-            Logger.get().info("Starting header %s", self.header_bytes)
             # read enough bytes for header
             self.header = _phrase_pb2_header(bytes(self.header_bytes))
             self.nbytes = 0  # Reset for receiving content.
-        Logger.get().info("header created:\n %s", self.header)
 
         # The header must be exist now. This assert is here to make mypy happy
         assert isinstance(self.header, message_pb2.Header)
 
-        num_bytes_to_read = self.header.content_length - self.nbytes
         # the offset in envelope means the offset for local buf
         offset = self.nbytes + self.envelope.offset
-        Logger.get().info("buffer_length -- %d", self.envelope.buf.buffer_length)
+        num_bytes_to_read = self.header.content_length - self.nbytes
+
         if self.envelope.buf.buffer_length == -1:  # it means UnspecifiedBuffer
             # We will pad bytes long enough for the receiving
             len_bytes_to_pad = self.header.content_length - len(self.envelope.buf.data)
@@ -195,9 +193,40 @@ class ReadStatus:
             data_view = memoryview(self.envelope.buf.data)[offset:]
             return min(num_bytes_to_read, MAX_ONE_TIME_RECV_BYTES), data_view
 
-        Logger.get().info("Prepare reading for s_buff\n %s", self.nbytes)
         data_view = self.envelope.buf.buffer_view[offset:]
         return min(num_bytes_to_read, MAX_ONE_TIME_RECV_BYTES), data_view
+
+
+@dataclasses.dataclass
+class WriteStatus:
+    """Store the status when write the data to sock"""
+
+    envelope: Envelope
+    nbytes: int = 0  # number of bytes having write
+    header: Optional[message_pb2.Header] = None
+    header_bytes: bytes = b""
+    header_sent: bool = False
+
+    def prepare_write(self) -> Tuple[int, memoryview]:
+        if self.header_sent == False and self.nbytes < ENCODED_HEADER_LENGTH:
+            if self.nbytes == 0:  # create at first time
+                self.header = _create_pb2_header(self.envelope)
+                self.header_bytes = self.header.SerializeToString()
+            num_bytes_to_write = len(self.header_bytes) - self.nbytes
+            return num_bytes_to_write, memoryview(self.header_bytes)
+
+        if self.header_sent == False and self.nbytes == ENCODED_HEADER_LENGTH:
+            self.nbytes = 0
+            self.header_sent = True
+
+        assert self.header is not None
+
+        # the offset in envelope means the offset for local buf
+        offset = self.nbytes + self.envelope.offset
+        num_bytes_to_write = self.header.content_length - self.nbytes
+
+        data_view = self.envelope.buf.buffer_view[offset:]
+        return min(num_bytes_to_write, MAX_ONE_TIME_RECV_BYTES), data_view
 
 
 class Pair(Handler):  # pylint: disable=too-many-instance-attributes
@@ -594,25 +623,15 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     def _write(self, envelope: Envelope) -> None:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
-        # header = _create_header(envelope)
-        header = _create_pb2_header(envelope)
-        end_pos = envelope.offset + envelope.nbytes
-        sent = 0  # number of bytes sent
-
+        write_status = WriteStatus(envelope=envelope)
         Logger.get().debug("handle write envelope %s", envelope)
 
-        while sent < envelope.nbytes + ENCODED_HEADER_LENGTH:
+        while True:
+            num_bytes_to_write, buff_view = write_status.prepare_write()
+            if num_bytes_to_write == 0:
+                break
             try:
-                if sent < ENCODED_HEADER_LENGTH:
-                    # send header
-                    num_bytes_sent = self.sock.send(header[sent:])
-                    sent += num_bytes_sent
-
-                if sent >= ENCODED_HEADER_LENGTH:
-                    # send content
-                    start_pos = envelope.offset + sent - ENCODED_HEADER_LENGTH
-                    to_send_bytes = envelope.buf.buffer_view[start_pos:end_pos]
-                    num_bytes_sent = self.sock.send(to_send_bytes)
+                num_bytes_sent = self.sock.send(buff_view)
             except BlockingIOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
@@ -637,7 +656,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 )
                 raise e
             else:
-                sent += num_bytes_sent
+                write_status.nbytes += num_bytes_sent
+
         Logger.get().debug("handle write envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
 
