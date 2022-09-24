@@ -3,5 +3,5 @@ black==22.3.0
 mypy==0.930
 protobuf==3.13.0  
 pylint==2.3.1
-pylint-protobuf=0.20.2
+pylint-protobuf==0.20.2
 pytest==5.4.3
