@@ -15,4 +15,4 @@
 #   further processing.
 
 lint_files=$(find bluefoglite -name "*.py" ! -name '*_pb2.py')
-pylint --rcfile=tools/.pylintrc "$@" ${lint_files}
+pylint --load-plugins=pylint_protobuf --rcfile=tools/.pylintrc "$@" ${lint_files}

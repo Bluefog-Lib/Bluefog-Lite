@@ -73,7 +73,7 @@ def test_header(nbytes, dtype):
         num_elements=12,
         shape=(4, 3),
     )
-    encoded_bytes = _create_pb2_header(envelope=envelope)
+    encoded_bytes = _create_pb2_header(envelope=envelope).SerializeToString()
     ret_header = _phrase_pb2_header(encoded_bytes)
 
     # We do not support creating the header with other details yet. In _create_pb2_header, they
@@ -101,7 +101,7 @@ def test_header_with_nbytes_only(nbytes):
         offset=0,
         nbytes=nbytes,
     )
-    encoded_bytes = _create_pb2_header(envelope=envelope)
+    encoded_bytes = _create_pb2_header(envelope=envelope).SerializeToString()
     ret_header = _phrase_pb2_header(encoded_bytes)
     assert len(encoded_bytes) == pair_module.ENCODED_HEADER_LENGTH
     assert ret_header == message_pb2.Header(

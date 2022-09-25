@@ -129,7 +129,7 @@ def _phrase_header(head_bytes) -> Header:
     return Header._make(struct.unpack(HEADER_FORMAT, head_bytes))
 
 
-def _create_pb2_header(envelope: Envelope) -> bytes:
+def _create_pb2_header(envelope: Envelope) -> message_pb2.Header:
     """create a message with http style header."""
     if envelope.nbytes is None or envelope.nbytes < 0:
         raise ValueError("The nbytpes to send can not be negative.")
@@ -145,13 +145,88 @@ def _create_pb2_header(envelope: Envelope) -> bytes:
         # Do not support with shape yet due to varying envelope size:
         # shape = envelope.shape
     )
-    return header.SerializeToString()
+    return header
 
 
 def _phrase_pb2_header(head_bytes: bytes):
     header = message_pb2.Header()
     header.ParseFromString(head_bytes)
     return header
+
+
+@dataclasses.dataclass
+class ReadStatus:
+    """Store the status when read the data from sock"""
+
+    envelope: Envelope
+    nbytes: int = 0  # number of bytes having read
+    # Pre-allocated space for reading header
+    header_bytes: bytearray = bytearray(ENCODED_HEADER_LENGTH)
+    # Populated when we receive enough data for header
+    header: Optional[message_pb2.Header] = None
+
+    def prepare_read(self) -> Tuple[int, memoryview]:
+        if self.header is None and self.nbytes < ENCODED_HEADER_LENGTH:
+            # Header hasn't read yet.
+            num_bytes_to_read = ENCODED_HEADER_LENGTH - self.nbytes
+            # Note it is crucial to create memoryview first to avoid the copy.
+            header_view = memoryview(self.header_bytes)[self.nbytes :]
+            return num_bytes_to_read, header_view
+
+        if self.header is None and self.nbytes == ENCODED_HEADER_LENGTH:
+            # read enough bytes for header
+            self.header = _phrase_pb2_header(bytes(self.header_bytes))
+            self.nbytes = 0  # Reset for receiving content.
+
+        # The header must be exist now. This assert is here to make mypy happy
+        assert isinstance(self.header, message_pb2.Header)
+
+        # the offset in envelope means the offset for local buf
+        offset = self.nbytes + self.envelope.offset
+        num_bytes_to_read = self.header.content_length - self.nbytes
+
+        if self.envelope.buf.buffer_length == -1:  # it means UnspecifiedBuffer
+            # We will pad bytes long enough for the receiving
+            len_bytes_to_pad = self.header.content_length - len(self.envelope.buf.data)
+            if len_bytes_to_pad > 0:
+                self.envelope.buf.data += bytearray(len_bytes_to_pad)
+            data_view = memoryview(self.envelope.buf.data)[offset:]
+            return min(num_bytes_to_read, MAX_ONE_TIME_RECV_BYTES), data_view
+
+        data_view = self.envelope.buf.buffer_view[offset:]
+        return min(num_bytes_to_read, MAX_ONE_TIME_RECV_BYTES), data_view
+
+
+@dataclasses.dataclass
+class WriteStatus:
+    """Store the status when write the data to sock"""
+
+    envelope: Envelope
+    nbytes: int = 0  # number of bytes having write
+    header: Optional[message_pb2.Header] = None
+    header_bytes: bytes = b""
+    header_sent: bool = False
+
+    def prepare_write(self) -> Tuple[int, memoryview]:
+        if not self.header_sent and self.nbytes < ENCODED_HEADER_LENGTH:
+            if self.nbytes == 0:  # create at first time
+                self.header = _create_pb2_header(self.envelope)
+                self.header_bytes = self.header.SerializeToString()
+            num_bytes_to_write = len(self.header_bytes) - self.nbytes
+            return num_bytes_to_write, memoryview(self.header_bytes)
+
+        if not self.header_sent and self.nbytes == ENCODED_HEADER_LENGTH:
+            self.nbytes = 0
+            self.header_sent = True
+
+        assert self.header is not None
+
+        # the offset in envelope means the offset for local buf
+        offset = self.nbytes + self.envelope.offset
+        num_bytes_to_write = self.header.content_length - self.nbytes
+
+        data_view = self.envelope.buf.buffer_view[offset:]
+        return min(num_bytes_to_write, MAX_ONE_TIME_RECV_BYTES), data_view
 
 
 class Pair(Handler):  # pylint: disable=too-many-instance-attributes
@@ -455,41 +530,64 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     # _read and _write are long complicated functions due the error handling.
     # See here https://www.python.org/dev/peps/pep-3151/#new-exception-classes
     # for the naming of error that possible thrown by socket in python.
+    #
+    # From write(2) man page (NOTES section):
+    #
+    #  If a write() is interrupted by a signal handler before any
+    #  bytes are written, then the call fails with the error EINTR;
+    #  if it is interrupted after at least one byte has been written,
+    #  the call succeeds, and returns the number of bytes written.
+    #
+    # Starting from Python 3.3, errors related to socket or address
+    # semantics raise OSError or one of its subclasses.
+    #    +-- OSError
+    #    |    +-- BlockingIOError
+    #    |    +-- ChildProcessError
+    #    |    +-- ConnectionError
+    #    |    |    +-- BrokenPipeError
+    #    |    |    +-- ConnectionAbortedError
+    #    |    |    +-- ConnectionRefusedError
+    #    |    |    +-- ConnectionResetError
+    #    |    +-- InterruptedError
+    #
+    # exception BlockingIOError:
+    #    Raised when an operation would block on an object (e.g. socket)
+    #    set for non-blocking operation. Corresponds to errno EAGAIN,
+    #    EALREADY, EWOULDBLOCK and EINPROGRESS.
+    # exception BrokenPipeError
+    #    A subclass of ConnectionError, raised when trying to write on a
+    #    pipe while the other end has been closed, or trying to write on a
+    #    socket which has been shutdown for writing. Corresponds to errno
+    #    EPIPE and ESHUTDOWN.
+    # exception ConnectionAbortedError
+    #    A subclass of ConnectionError, raised when a connection attempt is
+    #    aborted by the peer. Corresponds to errno ECONNABORTED.
+    # exception ConnectionRefusedError
+    #    A subclass of ConnectionError, raised when a connection attempt is
+    #    refused by the peer. Corresponds to errno ECONNREFUSED.
+    # exception ConnectionResetError
+    #    A subclass of ConnectionError, raised when a connection is reset by the
+    #    peer. Corresponds to errno ECONNRESET.
+    # exception InterruptedError
+    #    Raised when a system call is interrupted by an incoming signal.
+    #    Corresponds to errno EINTR.
+    #    Changed in version 3.5: Python now retries system calls when a syscall
+    #    is interrupted by a signal, except if the signal handler raises an exception
+    #    (see PEP 475 for the rationale), instead of raising InterruptedError.
 
     def _read(self, envelope: Envelope) -> None:  # pylint: disable=too-many-branches
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
-        # TODO: make a queue to send the message seperately
-        recv = 0  # number of bytes received
-        header = None
-        header_bytes = b""
-        end_pos = envelope.offset + envelope.nbytes
+        read_status = ReadStatus(envelope=envelope)
 
         Logger.get().debug("handle read envelope %s", envelope)
-        # See the comments in the _write function for the exception handling.
         while True:
+            num_bytes_to_read, buff_view = read_status.prepare_read()
+            if num_bytes_to_read == 0:
+                break
             try:
-                # Should be ready to read
-                if recv < ENCODED_HEADER_LENGTH:
-                    _header = self.sock.recv(ENCODED_HEADER_LENGTH - recv)
-                    recv += len(_header)
-                    header_bytes += _header
-
-                if header is not None:
-                    if envelope.nbytes != -1:
-                        start_pos = envelope.offset + recv - ENCODED_HEADER_LENGTH
-                        max_recv = min(MAX_ONE_TIME_RECV_BYTES, end_pos - start_pos)
-                        num_bytes_recv = self.sock.recv_into(
-                            envelope.buf.buffer_view[start_pos:end_pos], max_recv
-                        )
-                    else:
-                        # unspecified buffer.
-                        _data = self.sock.recv(MAX_ONE_TIME_RECV_BYTES)
-                        num_bytes_recv = len(_data)
-                        envelope.buf.data += _data
-                else:
-                    num_bytes_recv = 0
-
+                num_bytes_recv = self.sock.recv_into(buff_view, num_bytes_to_read)
+                Logger.get().debug("Recv done: %d", num_bytes_recv)
             except BlockingIOError as e:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 Logger.get().debug("_read encountered %s", e)
@@ -517,27 +615,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 )
                 raise e
             else:
-                recv += num_bytes_recv
-
-            if len(header_bytes) >= ENCODED_HEADER_LENGTH:
-                header = _phrase_pb2_header(header_bytes)
-                if envelope.nbytes == -1:
-                    # Unspecified buffer so no check.
-                    pass
-                elif (
-                    header.content_length > envelope.nbytes  # pylint: disable=no-member
-                ):
-                    raise BufferError(
-                        "Recv Buffer size should be equal or "
-                        "larger than the sending one."
-                    )
-
-            if header is not None:
-                if (
-                    recv - ENCODED_HEADER_LENGTH
-                    >= header.content_length  # pylint: disable=no-member
-                ):
-                    break
+                read_status.nbytes += num_bytes_recv
 
         Logger.get().debug("handle read envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
@@ -545,68 +623,15 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     def _write(self, envelope: Envelope) -> None:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
-        # header = _create_header(envelope)
-        header = _create_pb2_header(envelope)
-        end_pos = envelope.offset + envelope.nbytes
-        sent = 0  # number of bytes sent
-
+        write_status = WriteStatus(envelope=envelope)
         Logger.get().debug("handle write envelope %s", envelope)
 
-        # From write(2) man page (NOTES section):
-        #
-        #  If a write() is interrupted by a signal handler before any
-        #  bytes are written, then the call fails with the error EINTR;
-        #  if it is interrupted after at least one byte has been written,
-        #  the call succeeds, and returns the number of bytes written.
-        #
-        # Starting from Python 3.3, errors related to socket or address
-        # semantics raise OSError or one of its subclasses.
-        #    +-- OSError
-        #    |    +-- BlockingIOError
-        #    |    +-- ChildProcessError
-        #    |    +-- ConnectionError
-        #    |    |    +-- BrokenPipeError
-        #    |    |    +-- ConnectionAbortedError
-        #    |    |    +-- ConnectionRefusedError
-        #    |    |    +-- ConnectionResetError
-        #    |    +-- InterruptedError
-        #
-        # exception BlockingIOError:
-        #    Raised when an operation would block on an object (e.g. socket)
-        #    set for non-blocking operation. Corresponds to errno EAGAIN,
-        #    EALREADY, EWOULDBLOCK and EINPROGRESS.
-        # exception BrokenPipeError
-        #    A subclass of ConnectionError, raised when trying to write on a
-        #    pipe while the other end has been closed, or trying to write on a
-        #    socket which has been shutdown for writing. Corresponds to errno
-        #    EPIPE and ESHUTDOWN.
-        # exception ConnectionAbortedError
-        #    A subclass of ConnectionError, raised when a connection attempt is
-        #    aborted by the peer. Corresponds to errno ECONNABORTED.
-        # exception ConnectionRefusedError
-        #    A subclass of ConnectionError, raised when a connection attempt is
-        #    refused by the peer. Corresponds to errno ECONNREFUSED.
-        # exception ConnectionResetError
-        #    A subclass of ConnectionError, raised when a connection is reset by the
-        #    peer. Corresponds to errno ECONNRESET.
-        # exception InterruptedError
-        #    Raised when a system call is interrupted by an incoming signal.
-        #    Corresponds to errno EINTR.
-        #    Changed in version 3.5: Python now retries system calls when a syscall
-        #    is interrupted by a signal, except if the signal handler raises an exception
-        #    (see PEP 475 for the rationale), instead of raising InterruptedError.
-        while sent < envelope.nbytes + ENCODED_HEADER_LENGTH:
+        while True:
+            num_bytes_to_write, buff_view = write_status.prepare_write()
+            if num_bytes_to_write == 0:
+                break
             try:
-                if sent < ENCODED_HEADER_LENGTH:
-                    # send header
-                    num_bytes_sent = self.sock.send(header[sent:])
-                    sent += num_bytes_sent
-
-                if sent >= ENCODED_HEADER_LENGTH:
-                    # send content
-                    start_pos = envelope.offset + sent - ENCODED_HEADER_LENGTH
-                    to_send_bytes = envelope.buf.buffer_view[start_pos:end_pos]
-                    num_bytes_sent = self.sock.send(to_send_bytes)
+                num_bytes_sent = self.sock.send(buff_view)
             except BlockingIOError:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 pass
@@ -631,7 +656,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 )
                 raise e
             else:
-                sent += num_bytes_sent
+                write_status.nbytes += num_bytes_sent
+
         Logger.get().debug("handle write envelope done: %s", envelope)
         envelope.buf.handleCompletion(envelope.handle)
 

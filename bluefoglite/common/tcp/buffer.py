@@ -32,7 +32,7 @@ class Buffer(abc.ABC):  # pylint: disable=too-many-instance-attributes
     hm = HandleManager.getInstance()
 
     def __init__(self) -> None:
-        self.data = b""
+        self.data = bytearray()
         self.buffer_view = memoryview(self.data)
         self.buffer_length = 0
         self.mutex = threading.Lock()
@@ -148,7 +148,8 @@ class UnspecifiedBuffer(Buffer):
     def __init__(self, context: "AgentContext"):
         super().__init__()
         self.context = context
-        self.data = b""
+        self.data = bytearray(0)
+        self.buffer_length = -1
 
     def irecv(self, src: int, *, nbytes: int = -1, offset: int = 0) -> int:
         handle = self.hm.allocate()

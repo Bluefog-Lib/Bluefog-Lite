@@ -5,7 +5,7 @@ on: [push]
 jobs:
   format:
     name: Format check
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
@@ -20,7 +20,7 @@ jobs:
   
   lint:
     name: Lint check
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
@@ -37,7 +37,7 @@ jobs:
     
   mypy:
     name: mypy check
-    runs-on: macos-10.15
+    runs-on: macos-11
 
     steps:
     - uses: actions/checkout@v2
@@ -55,7 +55,7 @@ jobs:
 
   ubuntu-unit-test:
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         python-version: [3.7, 3.8]
@@ -79,7 +79,7 @@ jobs:
 
   macos-unit-test:
     
-    runs-on: macos-10.15
+    runs-on: macos-11
     strategy:
       matrix:
         python-version: [3.7, 3.8]
