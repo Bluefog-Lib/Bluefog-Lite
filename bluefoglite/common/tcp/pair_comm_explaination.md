@@ -41,6 +41,11 @@ is always in order, we have
     3. (Optional?) We can check the signature of remote_ready_to_recv and the first element of pending_send
    
 **Recv Function call (communication thread)**
-The key thing here is we need to know whether we are prepared to receive the header only or the full message and if it is full message, which buff to use for recieving. Note the sending side will only send the full message when a) the receive side send out the `ready_to_recv` message and b) receive side received the `read_to_send` message, i.e. `remote_ready_to_send` has length > 0.
 1. Wait the selectors.EVENT_READ popped then tested based on status:
-   1. If above two conditions are not satisified, 
+   1. If we get the header is about the `notify_send_ready`, check if there is the correspodning envolope in the `pending_recv`:
+      1. If Yes, call `remote_ready_to_recv` immediately.
+      2. If no, push to the queue and return.
+   2. If we get the header is about the `notify_recv_ready`, check if there is the correspodning envolope in the `pending_send`:
+      1. If Yes, call `remote_ready_to_send` and followed by `send_buff` immediately
+      2. If no, push to the queue and return.
+   3. If we get the header is about the `send_buffer`, we check the single `read_to_recv` variable must not be none and we know the picked one is the right one to write into.
