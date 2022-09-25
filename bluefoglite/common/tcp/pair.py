@@ -208,14 +208,14 @@ class WriteStatus:
     header_sent: bool = False
 
     def prepare_write(self) -> Tuple[int, memoryview]:
-        if self.header_sent == False and self.nbytes < ENCODED_HEADER_LENGTH:
+        if not self.header_sent and self.nbytes < ENCODED_HEADER_LENGTH:
             if self.nbytes == 0:  # create at first time
                 self.header = _create_pb2_header(self.envelope)
                 self.header_bytes = self.header.SerializeToString()
             num_bytes_to_write = len(self.header_bytes) - self.nbytes
             return num_bytes_to_write, memoryview(self.header_bytes)
 
-        if self.header_sent == False and self.nbytes == ENCODED_HEADER_LENGTH:
+        if not self.header_sent and self.nbytes == ENCODED_HEADER_LENGTH:
             self.nbytes = 0
             self.header_sent = True
 
