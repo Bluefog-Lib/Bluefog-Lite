@@ -16,12 +16,13 @@
 import dataclasses
 import collections
 import copy
+from email import message
 import enum
 import selectors
 import socket
 import struct
 import threading
-from typing import Any, Deque, Optional, Tuple, Union
+from typing import Any, Deque, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -253,9 +254,12 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self.peer_rank = peer_rank
         # self.sock: Optional[socket.socket] = None
 
-        # TODO 1. Use the tag to separate the message?
+        # Check the markdown file for these variables usage.
         self._pending_send: Deque[Envelope] = collections.deque()
         self._pending_recv: Deque[Envelope] = collections.deque()
+        self._remote_ready_to_send: List[message_pb2.Header] = []
+        self._remote_ready_to_recv: List[message_pb2.Header] = []
+        self._read_to_recv: Optional[Envelope] = None
 
         self.listen()
 
@@ -678,7 +682,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 handle=handle,
                 offset=offset,
                 nbytes=nbytes,
-                # Numpy-style only
+                # Numpy-style only. If not numpy, these are none value.
                 shape=buf.shape,
                 ndim=buf.ndim,
                 itemsize=buf.itemsize,
@@ -703,7 +707,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 handle=handle,
                 offset=offset,
                 nbytes=nbytes,
-                # Numpy-style only
+                # Numpy-style only. If not numpy, these are none value.
                 shape=buf.shape,
                 ndim=buf.ndim,
                 itemsize=buf.itemsize,
@@ -712,5 +716,38 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             )
             self._pending_recv.append(envelope)
 
-            # Should we call this immediately since we know it is ready?
-            # self.write()
+    def sent_notify_send_ready(
+        self, buf: Buffer, handle: int, nbytes: int, offset: int
+    ) -> None:
+        with self._mutex:
+            if self.state != PairState.CONNECTED:
+                raise RuntimeError(
+                    "The pair socket must be in the CONNECTED state "
+                    "before calling the notify_send_ready."
+                )
+            envelope = Envelope(
+                message_type=message_pb2.NOTIFY_SEND_READY,
+                buf=Buffer(),
+                handle=-1,
+                offset=offset,
+                nbytes=nbytes,
+            )
+            self._write(envelope=envelope)
+
+    def sent_notify_recv_ready(
+        self, buf: Buffer, handle: int, nbytes: int, offset: int
+    ) -> None:
+        with self._mutex:
+            if self.state != PairState.CONNECTED:
+                raise RuntimeError(
+                    "The pair socket must be in the CONNECTED state "
+                    "before calling the notify_send_ready."
+                )
+            envelope = Envelope(
+                message_type=message_pb2.NOTIFY_RECV_READY,
+                buf=Buffer(),
+                handle=-1,
+                offset=offset,
+                nbytes=nbytes,
+            )
+            self._write(envelope=envelope)

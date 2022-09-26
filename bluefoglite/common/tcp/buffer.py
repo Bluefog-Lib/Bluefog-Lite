@@ -32,9 +32,10 @@ class Buffer(abc.ABC):  # pylint: disable=too-many-instance-attributes
     hm = HandleManager.getInstance()
 
     def __init__(self) -> None:
-        self.data = bytearray()
+        self.data = bytearray()  # Only used when not pre-allocated storage
         self.buffer_view = memoryview(self.data)
         self.buffer_length = 0
+
         self.mutex = threading.Lock()
         self.cv = threading.Condition(self.mutex)
 
