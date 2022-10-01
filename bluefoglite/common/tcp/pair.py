@@ -181,6 +181,8 @@ class ReadStatus:
 
         # The header must be exist now. This assert is here to make mypy happy
         assert isinstance(self.header, message_pb2.Header)
+        if self.header.message_type != message_pb2.MessageType.SEND_BUFFER:
+            return 0, None
 
         # the offset in envelope means the offset for local buf
         offset = self.nbytes + self.envelope.offset
@@ -221,6 +223,8 @@ class WriteStatus:
             self.header_sent = True
 
         assert self.header is not None
+        if self.header.message_type != message_pb2.MessageType.SEND_BUFFER:
+            return 0, None
 
         # the offset in envelope means the offset for local buf
         offset = self.nbytes + self.envelope.offset
@@ -523,13 +527,55 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     def read(self) -> None:
         if self._pending_recv:
             # TODO consider supporting rendeveous mode as well as eager mode?
-            envolope = self._pending_recv.popleft()
-            self._read(envolope)
+            envelope = self._pending_recv.popleft()
+            err = self._read(envelope)
+            if err:
+                if envelope.message_type == message_pb2.MessageType.RECV_BUFFER:
+                    envelope.buf.handleCompletion(
+                        envelope.handle,
+                        EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
+                    )
+                return
+            # Post handle of finishing the sending
+            if envelope.message_type == message_pb2.MessageType.RECV_BUFFER:
+                envelope.buf.handleCompletion(envelope.handle)
+            elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
+                # TODO
+                pass
+            elif envelope.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
+                # TODO
+                pass
+            else:
+                raise RuntimeError(
+                    f"Unexpected the message type {envelope.message_type} encounter"
+                    " when read from sock"
+                )
 
     def write(self) -> None:
         if self._pending_send:
-            envolope = self._pending_send.popleft()
-            self._write(envolope)
+            envelope = self._pending_send.popleft()
+            err = self._write(envelope)
+            if err:
+                if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+                    envelope.buf.handleCompletion(
+                        envelope.handle,
+                        EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
+                    )
+                return
+            # Post handle of finishing the sending
+            if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+                envelope.buf.handleCompletion(envelope.handle)
+            elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
+                # TODO
+                pass
+            elif envelope.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
+                # TODO
+                pass
+            else:
+                raise RuntimeError(
+                    f"Unexpected the message type {envelope.message_type} encounter"
+                    " when write to sock"
+                )
 
     # _read and _write are long complicated functions due the error handling.
     # See here https://www.python.org/dev/peps/pep-3151/#new-exception-classes
@@ -579,7 +625,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     #    is interrupted by a signal, except if the signal handler raises an exception
     #    (see PEP 475 for the rationale), instead of raising InterruptedError.
 
-    def _read(self, envelope: Envelope) -> None:  # pylint: disable=too-many-branches
+    def _read(self, envelope: Envelope) -> Optional[Exception]:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         read_status = ReadStatus(envelope=envelope)
@@ -604,13 +650,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     "side of socket closed connection.",
                     e,
                 )
-                envelope.buf.handleCompletion(
-                    envelope.handle,
-                    EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
-                )
                 self.changeState(PairState.CLOSED)
-
-                return
+                return e
             except ConnectionError as e:
                 Logger.get().warning(
                     "Encountered when recv: %s. The connection is either refused"
@@ -622,9 +663,9 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 read_status.nbytes += num_bytes_recv
 
         Logger.get().debug("handle read envelope done: %s", envelope)
-        envelope.buf.handleCompletion(envelope.handle)
+        return None
 
-    def _write(self, envelope: Envelope) -> None:
+    def _write(self, envelope: Envelope) -> Optional[Exception]:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         write_status = WriteStatus(envelope=envelope)
@@ -646,12 +687,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     "side of socket closed connection.",
                     e,
                 )
-                envelope.buf.handleCompletion(
-                    envelope.handle,
-                    EventStatus(status=EventStatusEnum.ERROR, err=str(e)),
-                )
                 self.changeState(PairState.CLOSED)
-                return
+                return e
             except ConnectionError as e:
                 Logger.get().warning(
                     "Encountered when recv: %s. The connection is either refused"
@@ -663,7 +700,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 write_status.nbytes += num_bytes_sent
 
         Logger.get().debug("handle write envelope done: %s", envelope)
-        envelope.buf.handleCompletion(envelope.handle)
+        return None
 
     def send(  # pylint: disable=too-many-arguments
         self, buf: Buffer, handle: int, nbytes: int, offset: int
@@ -751,3 +788,32 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 nbytes=nbytes,
             )
             self._write(envelope=envelope)
+
+    def _process_notify_send_ready(self, envelope: Envelope):
+        """After receiving the notification of send read"""
+        header = _create_pb2_header(envelope=envelope)
+        with self._mutex:
+            if not self._pending_recv:
+                self._remote_ready_to_send.append(header)
+                return
+
+            out_envolope = self._pending_recv.popleft()
+            self._read_to_recv = out_envolope
+            self.sent_notify_recv_ready(
+                envelope.buf, envelope.handle, envelope.nbytes, envelope.offset
+            )
+
+    def _process_notify_recv_ready(self, envelope: Envelope):
+        """After receiving the notification of the recv ready, it means remote side
+        are ready receive something.
+        """
+        header = _create_pb2_header(envelope=envelope)
+        with self._mutex:
+            if not self._pending_send:
+                # This side of the pair is not ready yet.
+                self._remote_ready_to_recv.append(header)
+                return
+
+            out_envolope = self._pending_recv.popleft()
+            # TODO: make some sanity check between the header and out_envolope
+            self._write(out_envolope)
