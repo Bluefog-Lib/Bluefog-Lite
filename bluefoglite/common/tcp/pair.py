@@ -26,7 +26,8 @@ from typing import Any, Deque, List, Optional, Tuple, Union
 
 import numpy as np
 
-from bluefoglite.common.tcp import message_pb2  # type: ignore
+from bluefoglite.common.tcp import message_pb2
+from bluefoglite.common.tcp import buffer  # type: ignore
 from bluefoglite.common.tcp.buffer import Buffer, TDtype
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
 from bluefoglite.common.handle_manager import (
@@ -256,13 +257,14 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         self.self_rank = self_rank
         self.peer_rank = peer_rank
-        # self.sock: Optional[socket.socket] = None
+
+        self.new_style = False
 
         # Check the markdown file for these variables usage.
         self._pending_send: Deque[Envelope] = collections.deque()
         self._pending_recv: Deque[Envelope] = collections.deque()
-        self._remote_ready_to_send: List[message_pb2.Header] = []
-        self._remote_ready_to_recv: List[message_pb2.Header] = []
+        self._remote_ready_to_send: Deque[message_pb2.Header] = []
+        self._remote_ready_to_recv: Deque[message_pb2.Header] = []
         self._read_to_recv: Optional[Envelope] = None
 
         self.listen()
@@ -525,57 +527,84 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         self.changeState(PairState.CONNECTED)
 
     def read(self) -> None:
-        if self._pending_recv:
-            # TODO consider supporting rendeveous mode as well as eager mode?
-            envelope = self._pending_recv.popleft()
-            err = self._read(envelope)
-            if err:
-                if envelope.message_type == message_pb2.MessageType.RECV_BUFFER:
-                    envelope.buf.handleCompletion(
-                        envelope.handle,
-                        EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
-                    )
-                return
-            # Post handle of finishing the sending
-            if envelope.message_type == message_pb2.MessageType.RECV_BUFFER:
-                envelope.buf.handleCompletion(envelope.handle)
-            elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
-                # TODO
-                pass
-            elif envelope.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
-                # TODO
-                pass
+        if self.new_style:
+            if self._read_to_recv:
+                envelope = self._read_to_recv
             else:
-                raise RuntimeError(
-                    f"Unexpected the message type {envelope.message_type} encounter"
-                    " when read from sock"
+                envelope = Envelope(  # A mock envelope for receive notification
+                    message_type=message_pb2.UNKNOWN,
+                    buf=buffer.empty_mock_buffer,  # Not used
+                    handle=-1,
+                    nbytes=0,
+                    offset=0,
                 )
+        else:
+            if self._pending_recv:
+                envelope = self._pending_recv.popleft()
+            else:
+                return
+        err, header = self._read(envelope)
+
+        # TODO We need the mutex over here!
+        if err:
+            if envelope.message_type == message_pb2.MessageType.RECV_BUFFER:
+                envelope.buf.handleCompletion(
+                    envelope.handle,
+                    EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
+                )
+            return
+        # Post handle of finishing the sending
+        if header.message_type == message_pb2.MessageType.SEND_BUFFER:
+            self._read_to_recv is None
+            envelope.buf.handleCompletion(envelope.handle)
+        elif header.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
+            if self._pending_recv > 0 and self._read_to_recv is None:
+                self._read_to_recv = _create_pb2_header(self._pending_recv.popleft())
+            else:
+                self._remote_ready_to_send.append(header)
+        elif header.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
+            if self._pending_send:
+                envelope = self._pending_send.popleft()
+                self._write(envelope)
+            else:
+                self._remote_ready_to_recv.append(header)
+        else:
+            raise RuntimeError(
+                f"Unexpected the message type {header.message_type} encounter"
+                " when read from sock"
+            )
 
     def write(self) -> None:
-        if self._pending_send:
-            envelope = self._pending_send.popleft()
-            err = self._write(envelope)
-            if err:
-                if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
-                    envelope.buf.handleCompletion(
-                        envelope.handle,
-                        EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
-                    )
-                return
-            # Post handle of finishing the sending
-            if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
-                envelope.buf.handleCompletion(envelope.handle)
-            elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
-                # TODO
-                pass
-            elif envelope.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
-                # TODO
-                pass
+        if self.new_style:
+            if self._read_to_recv:
+                envelope = self._read_to_recv
             else:
-                raise RuntimeError(
-                    f"Unexpected the message type {envelope.message_type} encounter"
-                    " when write to sock"
+                return
+        else:
+            if self._pending_send:
+                envelope = self._pending_send.popleft()
+            else:
+                return
+        err = self._write(envelope)
+        if err:
+            if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+                envelope.buf.handleCompletion(
+                    envelope.handle,
+                    EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
                 )
+            return
+        # Post handle of finishing the sending
+        if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+            envelope.buf.handleCompletion(envelope.handle)
+        elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
+            pass
+        elif envelope.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
+            pass
+        else:
+            raise RuntimeError(
+                f"Unexpected the message type {envelope.message_type} encounter"
+                " when write to sock"
+            )
 
     # _read and _write are long complicated functions due the error handling.
     # See here https://www.python.org/dev/peps/pep-3151/#new-exception-classes
@@ -625,7 +654,9 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     #    is interrupted by a signal, except if the signal handler raises an exception
     #    (see PEP 475 for the rationale), instead of raising InterruptedError.
 
-    def _read(self, envelope: Envelope) -> Optional[Exception]:
+    def _read(
+        self, envelope: Envelope
+    ) -> Tuple[Optional[Exception], message_pb2.Header]:
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         read_status = ReadStatus(envelope=envelope)
@@ -651,7 +682,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     e,
                 )
                 self.changeState(PairState.CLOSED)
-                return e
+                return e, read_status.header
             except ConnectionError as e:
                 Logger.get().warning(
                     "Encountered when recv: %s. The connection is either refused"
@@ -663,7 +694,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 read_status.nbytes += num_bytes_recv
 
         Logger.get().debug("handle read envelope done: %s", envelope)
-        return None
+        return None, read_status.header
 
     def _write(self, envelope: Envelope) -> Optional[Exception]:
         if self.sock is None:
@@ -707,12 +738,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
-            if self.state != PairState.CONNECTED:
-                raise RuntimeError(
-                    "The pair socket must be in the CONNECTED state "
-                    "before calling the send."
-                )
-
+            self._check_connected()
             envelope = Envelope(
                 message_type=message_pb2.SEND_BUFFER,
                 buf=buf,
@@ -733,11 +759,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
     ) -> None:
         """Send the value in buffer to remote peer in the pair."""
         with self._mutex:
-            if self.state != PairState.CONNECTED:
-                raise RuntimeError(
-                    "The pair socket must be in the CONNECTED state "
-                    "before calling the recv."
-                )
+            self._check_connected()
             envelope = Envelope(
                 message_type=message_pb2.RECV_BUFFER,
                 buf=buf,
@@ -753,39 +775,84 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             )
             self._pending_recv.append(envelope)
 
-    def sent_notify_send_ready(
-        self, buf: Buffer, handle: int, nbytes: int, offset: int
-    ) -> None:
+    def _check_connected(self):
+        if self.state != PairState.CONNECTED:
+            raise RuntimeError(
+                "The pair socket must be in the CONNECTED state "
+                "before calling the send or recv."
+            )
+
+    def send_new(self, buf: Buffer, handle: int, nbytes: int, offset: int) -> None:
         with self._mutex:
-            if self.state != PairState.CONNECTED:
-                raise RuntimeError(
-                    "The pair socket must be in the CONNECTED state "
-                    "before calling the notify_send_ready."
-                )
+            self._check_connected()
             envelope = Envelope(
-                message_type=message_pb2.NOTIFY_SEND_READY,
-                buf=Buffer(),
-                handle=-1,
+                message_type=message_pb2.SEND_BUFFER,
+                buf=buf,
+                handle=handle,
                 offset=offset,
                 nbytes=nbytes,
+                # Numpy-style only. If not numpy, these are none value.
+                shape=buf.shape,
+                ndim=buf.ndim,
+                itemsize=buf.itemsize,
+                dtype=buf.dtype,
+                num_elements=np.prod(buf.shape),
+            )
+            if self._remote_ready_to_recv:
+                header = self._remote_ready_to_recv.popleft()
+                # TODO check the header and envelope.
+
+                # We don't need to send notify send, but send it directly?
+                # self.sent_notify_send_ready(nbytes, offset)
+                self._write(envelope=envelope)
+            else:
+                self._pending_send.append(envelope)
+                self.sent_notify_send_ready(nbytes, offset)
+
+    def recv_new(self, buf: Buffer, handle: int, nbytes: int, offset: int) -> None:
+        with self._mutex:
+            self._check_connected()
+            envelope = Envelope(
+                message_type=message_pb2.RECV_BUFFER,
+                buf=buf,
+                handle=handle,
+                offset=offset,
+                nbytes=nbytes,
+                # Numpy-style only. If not numpy, these are none value.
+                shape=buf.shape,
+                ndim=buf.ndim,
+                itemsize=buf.itemsize,
+                dtype=buf.dtype,
+                num_elements=np.prod(buf.shape),
+            )
+            if self._read_to_recv is None:  # It means there is no pending recv.
+                # TODO check the header and envelope.
+                self._read_to_recv = envelope
+                self.sent_notify_recv_ready(nbytes, offset)
+            else:
+                self._pending_recv.append(envelope)
+
+    def sent_notify_send_ready(self, nbytes: int, offset: int) -> None:
+        with self._mutex:
+            self._check_connected()
+            envelope = Envelope(
+                message_type=message_pb2.NOTIFY_SEND_READY,
+                buf=buffer.empty_mock_buffer,  # Not used
+                handle=-1,
+                nbytes=nbytes,
+                offset=offset,
             )
             self._write(envelope=envelope)
 
-    def sent_notify_recv_ready(
-        self, buf: Buffer, handle: int, nbytes: int, offset: int
-    ) -> None:
+    def sent_notify_recv_ready(self, nbytes: int, offset: int) -> None:
         with self._mutex:
-            if self.state != PairState.CONNECTED:
-                raise RuntimeError(
-                    "The pair socket must be in the CONNECTED state "
-                    "before calling the notify_send_ready."
-                )
+            self._check_connected()
             envelope = Envelope(
                 message_type=message_pb2.NOTIFY_RECV_READY,
-                buf=Buffer(),
+                buf=buffer.empty_mock_buffer,  # Not used
                 handle=-1,
-                offset=offset,
                 nbytes=nbytes,
+                offset=offset,
             )
             self._write(envelope=envelope)
 
