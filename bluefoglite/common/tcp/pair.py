@@ -782,6 +782,11 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 "before calling the send or recv."
             )
 
+    # The order of the function calling must follows:
+    # Send => write and recv => read
+    # Send/Recv must be called under main thread, but write/read can be either
+    # called after send/recv directly or triggered by eventloop(Selector).
+
     def send_new(self, buf: Buffer, handle: int, nbytes: int, offset: int) -> None:
         with self._mutex:
             self._check_connected()
