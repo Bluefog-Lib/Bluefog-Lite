@@ -566,6 +566,13 @@ class Pair(
                     EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
                 )
             return
+        if header is None:
+            Logger.get().info(
+                "There is not header returned after successful _read."
+                "This should not happen but we just skip processing for this case."
+            )
+            return
+
         # Post handle of finishing the sending
         if header.message_type == message_pb2.MessageType.SEND_BUFFER:
             self._read_to_recv = None
@@ -610,6 +617,7 @@ class Pair(
                     EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
                 )
             return
+
         # Post handle of finishing the sending
         if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
             assert envelope.buf is not None
@@ -674,7 +682,8 @@ class Pair(
 
     def _read(
         self, envelope: Envelope
-    ) -> Tuple[Optional[Exception], message_pb2.Header]:
+    ) -> Tuple[Optional[Exception], Optional[message_pb2.Header]]:
+        """Reads the data in sock into the buffer of envelope."""
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         read_status = ReadStatus(envelope=envelope)
@@ -700,8 +709,6 @@ class Pair(
                     e,
                 )
                 self.changeState(PairState.CLOSED)
-
-                assert read_status.header is not None  # Is this needed?
                 return e, read_status.header
             except ConnectionError as e:
                 Logger.get().warning(
@@ -714,7 +721,6 @@ class Pair(
                 read_status.nbytes += num_bytes_recv
 
         Logger.get().debug("handle read envelope done: %s", envelope)
-        assert read_status.header is not None  # Is this needed?
         return None, read_status.header
 
     def _write(self, envelope: Envelope) -> Optional[Exception]:
