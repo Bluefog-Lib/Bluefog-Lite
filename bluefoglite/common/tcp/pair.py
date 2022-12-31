@@ -539,6 +539,7 @@ class Pair(
         self.changeState(PairState.CONNECTED)
 
     def read(self) -> None:  # pylint: disable=too-many-branches
+        # Pre-processing
         if self.new_style:
             if self._read_to_recv:
                 envelope = self._read_to_recv
@@ -555,8 +556,9 @@ class Pair(
                 envelope = self._pending_recv.popleft()
             else:
                 return
-        err, header = self._read(envelope)
 
+        # Processing the read event
+        err, header = self._read(envelope)
         # TODO We need the mutex over here!
         if err:
             if envelope.message_type == message_pb2.MessageType.RECV_BUFFER:
@@ -573,16 +575,14 @@ class Pair(
             )
             return
 
-        # Post handle of finishing the sending
+        # Post-processing (Old style only contains header=SEND_BUFFER case)
         if header.message_type == message_pb2.MessageType.SEND_BUFFER:
             self._read_to_recv = None
             assert envelope.buf is not None
             envelope.buf.handleCompletion(envelope.handle)
         elif header.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
             if self._pending_recv and self._read_to_recv is None:
-                # TODO Create _read_to_recv properly. It needs the buffer
-                # self._read_to_recv = _create_pb2_header(self._pending_recv.popleft())
-                pass
+                self._read_to_recv = self._pending_recv.popleft()
             else:
                 self._remote_ready_to_send.append(header)
         elif header.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
@@ -598,6 +598,7 @@ class Pair(
             )
 
     def write(self) -> None:
+        # Pre-processing
         if self.new_style:
             if self._read_to_recv:
                 envelope = self._read_to_recv
@@ -608,6 +609,8 @@ class Pair(
                 envelope = self._pending_send.popleft()
             else:
                 return
+
+        # Processing the write event
         err = self._write(envelope)
         if err:
             if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
@@ -618,7 +621,7 @@ class Pair(
                 )
             return
 
-        # Post handle of finishing the sending
+        # Post-processing (Old style only contains envelope=SEND_BUFFER case)
         if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
             assert envelope.buf is not None
             envelope.buf.handleCompletion(envelope.handle)
@@ -724,6 +727,7 @@ class Pair(
         return None, read_status.header
 
     def _write(self, envelope: Envelope) -> Optional[Exception]:
+        """Writes the data in the buffer of envelope to the socket for sending."""
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         write_status = WriteStatus(envelope=envelope)
