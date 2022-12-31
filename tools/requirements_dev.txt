@@ -6,3 +6,4 @@ protobuf==3.19.4
 pylint==2.3.1
 pylint-protobuf==0.20.2
 pytest==5.4.3
+types-protobuf==3.19.12
