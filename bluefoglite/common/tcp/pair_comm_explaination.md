@@ -11,7 +11,7 @@ The workflow is in the main thread create envolope of send/recv request and push
 
 ### New half-active/passive two-phase eventloop style.
 
-The main difference between this new style versus the old style is we send out the header alone first and wait until the another side checked and stated it is ready, then we send the full informations.
+The main difference between this new style versus the old style is we send out the header alone first and wait. We send the full informations until the other side stated it is ready.
 
 To enable that, we need to extend status variables in the pair. Assuming the send/recv within one pair
 is always in order, we have

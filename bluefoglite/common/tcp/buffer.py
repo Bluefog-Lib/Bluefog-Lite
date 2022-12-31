@@ -161,6 +161,3 @@ class UnspecifiedBuffer(Buffer):
     def recv(self, src: int, *, nbytes: int = -1, offset: int = 0):
         handle = self.irecv(src)
         self.waitCompletion(handle)
-
-
-empty_mock_buffer = None  # Buffer()

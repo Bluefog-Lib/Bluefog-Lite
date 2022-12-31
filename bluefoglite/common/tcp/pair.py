@@ -16,18 +16,16 @@
 import dataclasses
 import collections
 import copy
-from email import message
 import enum
 import selectors
 import socket
 import struct
 import threading
-from typing import Any, Deque, List, Optional, Tuple, Union
+from typing import Any, Deque, Optional, Tuple, Union
 
 import numpy as np
 
 from bluefoglite.common.tcp import message_pb2
-from bluefoglite.common.tcp import buffer  # type: ignore
 from bluefoglite.common.tcp.buffer import Buffer, TDtype
 from bluefoglite.common.tcp.eventloop import EventLoop, Handler
 from bluefoglite.common.handle_manager import (
@@ -37,6 +35,8 @@ from bluefoglite.common.handle_manager import (
 )
 from bluefoglite.common.logger import Logger
 
+
+FAKE_BUFFER = b""  # a fake buffer location, which will never be used.
 
 MAX_ONE_TIME_RECV_BYTES = 2**20
 
@@ -91,7 +91,7 @@ class PairState(enum.Enum):
 @dataclasses.dataclass
 class Envelope:  # pylint: disable=too-many-instance-attributes
     message_type: Any  # it is message_pb2.MessageType enum
-    buf: Buffer
+    buf: Optional[Buffer]  # It can be none if message_type is notification.
     handle: int
     # Byte offset to read from/write to and byte count w.r.t local buffer
     # it is not used for remote buffer.
@@ -183,7 +183,10 @@ class ReadStatus:
         # The header must be exist now. This assert is here to make mypy happy
         assert isinstance(self.header, message_pb2.Header)
         if self.header.message_type != message_pb2.MessageType.SEND_BUFFER:
-            return 0, None
+            return 0, memoryview(FAKE_BUFFER)
+
+        # At this stage, the envelope must associate with one buffer.
+        assert self.envelope.buf is not None
 
         # the offset in envelope means the offset for local buf
         offset = self.nbytes + self.envelope.offset
@@ -225,7 +228,10 @@ class WriteStatus:
 
         assert self.header is not None
         if self.header.message_type != message_pb2.MessageType.SEND_BUFFER:
-            return 0, None
+            return 0, memoryview(FAKE_BUFFER)
+
+        # At this stage, the envelope must associate with one buffer.
+        assert self.envelope.buf is not None
 
         # the offset in envelope means the offset for local buf
         offset = self.nbytes + self.envelope.offset
@@ -235,7 +241,9 @@ class WriteStatus:
         return min(num_bytes_to_write, MAX_ONE_TIME_RECV_BYTES), data_view
 
 
-class Pair(Handler):  # pylint: disable=too-many-instance-attributes
+class Pair(
+    Handler
+):  # pylint: disable=too-many-instance-attributes,too-many-public-methods
     def __init__(
         self,
         event_loop: EventLoop,
@@ -263,8 +271,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         # Check the markdown file for these variables usage.
         self._pending_send: Deque[Envelope] = collections.deque()
         self._pending_recv: Deque[Envelope] = collections.deque()
-        self._remote_ready_to_send: Deque[message_pb2.Header] = []
-        self._remote_ready_to_recv: Deque[message_pb2.Header] = []
+        self._remote_ready_to_send: Deque[message_pb2.Header] = collections.deque()
+        self._remote_ready_to_recv: Deque[message_pb2.Header] = collections.deque()
         self._read_to_recv: Optional[Envelope] = None
 
         self.listen()
@@ -415,6 +423,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         if next_state == PairState.CLOSED:
             # Do some cleanup job here
             for envelope in self._pending_recv:
+                if envelope.buf is None:
+                    continue
                 envelope.buf.handleCompletion(
                     envelope.handle,
                     EventStatus(
@@ -423,6 +433,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     ),
                 )
             for envelope in self._pending_send:
+                if envelope.buf is None:
+                    continue
                 envelope.buf.handleCompletion(
                     envelope.handle,
                     EventStatus(
@@ -526,14 +538,14 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
 
         self.changeState(PairState.CONNECTED)
 
-    def read(self) -> None:
+    def read(self) -> None:  # pylint: disable=too-many-branches
         if self.new_style:
             if self._read_to_recv:
                 envelope = self._read_to_recv
             else:
                 envelope = Envelope(  # A mock envelope for receive notification
                     message_type=message_pb2.UNKNOWN,
-                    buf=buffer.empty_mock_buffer,  # Not used
+                    buf=None,  # Not used
                     handle=-1,
                     nbytes=0,
                     offset=0,
@@ -548,6 +560,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         # TODO We need the mutex over here!
         if err:
             if envelope.message_type == message_pb2.MessageType.RECV_BUFFER:
+                assert envelope.buf is not None
                 envelope.buf.handleCompletion(
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
@@ -555,11 +568,14 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             return
         # Post handle of finishing the sending
         if header.message_type == message_pb2.MessageType.SEND_BUFFER:
-            self._read_to_recv is None
+            self._read_to_recv = None
+            assert envelope.buf is not None
             envelope.buf.handleCompletion(envelope.handle)
         elif header.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
-            if self._pending_recv > 0 and self._read_to_recv is None:
-                self._read_to_recv = _create_pb2_header(self._pending_recv.popleft())
+            if self._pending_recv and self._read_to_recv is None:
+                # TODO Create _read_to_recv properly. It needs the buffer
+                # self._read_to_recv = _create_pb2_header(self._pending_recv.popleft())
+                pass
             else:
                 self._remote_ready_to_send.append(header)
         elif header.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
@@ -588,6 +604,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
         err = self._write(envelope)
         if err:
             if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+                assert envelope.buf is not None
                 envelope.buf.handleCompletion(
                     envelope.handle,
                     EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
@@ -595,6 +612,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             return
         # Post handle of finishing the sending
         if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+            assert envelope.buf is not None
             envelope.buf.handleCompletion(envelope.handle)
         elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
             pass
@@ -682,6 +700,8 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                     e,
                 )
                 self.changeState(PairState.CLOSED)
+
+                assert read_status.header is not None  # Is this needed?
                 return e, read_status.header
             except ConnectionError as e:
                 Logger.get().warning(
@@ -694,6 +714,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 read_status.nbytes += num_bytes_recv
 
         Logger.get().debug("handle read envelope done: %s", envelope)
+        assert read_status.header is not None  # Is this needed?
         return None, read_status.header
 
     def _write(self, envelope: Envelope) -> Optional[Exception]:
@@ -783,7 +804,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             )
 
     # The order of the function calling must follows:
-    # Send => write and recv => read
+    # send => (write =>) _write and recv => read => _read
     # Send/Recv must be called under main thread, but write/read can be either
     # called after send/recv directly or triggered by eventloop(Selector).
 
@@ -805,7 +826,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             )
             if self._remote_ready_to_recv:
                 header = self._remote_ready_to_recv.popleft()
-                # TODO check the header and envelope.
+                del header  # TODO check the header and envelope.
 
                 # We don't need to send notify send, but send it directly?
                 # self.sent_notify_send_ready(nbytes, offset)
@@ -842,7 +863,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             self._check_connected()
             envelope = Envelope(
                 message_type=message_pb2.NOTIFY_SEND_READY,
-                buf=buffer.empty_mock_buffer,  # Not used
+                buf=None,  # Not used
                 handle=-1,
                 nbytes=nbytes,
                 offset=offset,
@@ -854,38 +875,9 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
             self._check_connected()
             envelope = Envelope(
                 message_type=message_pb2.NOTIFY_RECV_READY,
-                buf=buffer.empty_mock_buffer,  # Not used
+                buf=None,  # Not used
                 handle=-1,
                 nbytes=nbytes,
                 offset=offset,
             )
             self._write(envelope=envelope)
-
-    def _process_notify_send_ready(self, envelope: Envelope):
-        """After receiving the notification of send read"""
-        header = _create_pb2_header(envelope=envelope)
-        with self._mutex:
-            if not self._pending_recv:
-                self._remote_ready_to_send.append(header)
-                return
-
-            out_envolope = self._pending_recv.popleft()
-            self._read_to_recv = out_envolope
-            self.sent_notify_recv_ready(
-                envelope.buf, envelope.handle, envelope.nbytes, envelope.offset
-            )
-
-    def _process_notify_recv_ready(self, envelope: Envelope):
-        """After receiving the notification of the recv ready, it means remote side
-        are ready receive something.
-        """
-        header = _create_pb2_header(envelope=envelope)
-        with self._mutex:
-            if not self._pending_send:
-                # This side of the pair is not ready yet.
-                self._remote_ready_to_recv.append(header)
-                return
-
-            out_envolope = self._pending_recv.popleft()
-            # TODO: make some sanity check between the header and out_envolope
-            self._write(out_envolope)
