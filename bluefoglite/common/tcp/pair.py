@@ -95,8 +95,8 @@ class Envelope:  # pylint: disable=too-many-instance-attributes
     handle: int
     # Byte offset to read from/write to and byte count w.r.t local buffer
     # it is not used for remote buffer.
-    offset: int
-    nbytes: int
+    offset: int = 0
+    nbytes: int = -1
 
     # TODO(ybc) We don't populate the shape because it will make
     # the size of protobuf unknown.
@@ -271,7 +271,8 @@ class Pair(
         # Check the markdown file for these variables usage.
         self._pending_send: Deque[Envelope] = collections.deque()
         self._pending_recv: Deque[Envelope] = collections.deque()
-        self._remote_ready_to_send: Deque[message_pb2.Header] = collections.deque()
+        # We don't need _remote_ready_to_send information.
+        # self._remote_ready_to_send: Deque[message_pb2.Header] = collections.deque()
         self._remote_ready_to_recv: Deque[message_pb2.Header] = collections.deque()
         self._read_to_recv: Optional[Envelope] = None
 
@@ -541,16 +542,13 @@ class Pair(
     def read(self) -> None:  # pylint: disable=too-many-branches
         # Pre-processing
         if self.new_style:
-            if self._read_to_recv:
-                envelope = self._read_to_recv
-            else:
-                envelope = Envelope(  # A mock envelope for receive notification
-                    message_type=message_pb2.UNKNOWN,
-                    buf=None,  # Not used
-                    handle=-1,
-                    nbytes=0,
-                    offset=0,
-                )
+            placeholder_envelope = Envelope(
+                message_type=message_pb2.UNKNOWN, buf=None, handle=-1
+            )
+            # If _read_to_recv is not empty, we are prepared to read header
+            # then write to buff. Otherwise, use placeholder envelope for
+            # receiving the notification header.
+            envelope = self._read_to_recv or placeholder_envelope
         else:
             if self._pending_recv:
                 envelope = self._pending_recv.popleft()
@@ -584,7 +582,8 @@ class Pair(
             if self._pending_recv and self._read_to_recv is None:
                 self._read_to_recv = self._pending_recv.popleft()
             else:
-                self._remote_ready_to_send.append(header)
+                # self._remote_ready_to_send.append(header)
+                pass
         elif header.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
             if self._pending_send:
                 envelope = self._pending_send.popleft()
@@ -834,16 +833,21 @@ class Pair(
                 dtype=buf.dtype,
                 num_elements=np.prod(buf.shape),
             )
-            if self._remote_ready_to_recv:
-                header = self._remote_ready_to_recv.popleft()
-                del header  # TODO check the header and envelope.
+            self._pending_send.append(envelope)
 
-                # We don't need to send notify send, but send it directly?
-                # self.sent_notify_send_ready(nbytes, offset)
-                self._write(envelope=envelope)
-            else:
-                self._pending_send.append(envelope)
+            # Case 1: no remote ready signal. Notify and wait.
+            if not self._remote_ready_to_recv:
                 self.sent_notify_send_ready(nbytes, offset)
+                return
+
+            # Case 2: we know at least one remote ready signal.
+            # Note _pending_send is never empty at the first time into loop.
+            while self._remote_ready_to_recv and self._pending_send:
+                header = self._remote_ready_to_recv.popleft()
+                # TODO check the header and find proper envelope.
+                del header
+                sent_envelope = self._pending_send.popleft()
+                self._write(envelope=sent_envelope)
 
     def recv_new(self, buf: Buffer, handle: int, nbytes: int, offset: int) -> None:
         with self._mutex:
@@ -861,12 +865,14 @@ class Pair(
                 dtype=buf.dtype,
                 num_elements=np.prod(buf.shape),
             )
-            if self._read_to_recv is None:  # It means there is no pending recv.
+            self._pending_recv.append(envelope)
+
+            if self._read_to_recv:  # It means there is no pending recv.
                 # TODO check the header and envelope.
-                self._read_to_recv = envelope
-                self.sent_notify_recv_ready(nbytes, offset)
-            else:
-                self._pending_recv.append(envelope)
+                self._read_to_recv = self._pending_recv.popleft()
+                self.sent_notify_recv_ready(
+                    self._read_to_recv.nbytes, self._read_to_recv.offset
+                )
 
     def sent_notify_send_ready(self, nbytes: int, offset: int) -> None:
         with self._mutex:
