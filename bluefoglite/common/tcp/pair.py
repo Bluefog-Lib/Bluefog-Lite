@@ -799,7 +799,17 @@ class Pair(
         )
         return None
 
-    def send(  # pylint: disable=too-many-arguments
+    def send(self, buf: Buffer, handle: int, nbytes: int, offset: int) -> None:
+        if self.new_style:
+            return self.send_new(buf=buf, handle=handle, nbytes=nbytes, offset=offset)
+        return self.send_old(buf=buf, handle=handle, nbytes=nbytes, offset=offset)
+
+    def recv(self, buf: Buffer, handle: int, nbytes: int, offset: int) -> None:
+        if self.new_style:
+            return self.recv_new(buf=buf, handle=handle, nbytes=nbytes, offset=offset)
+        return self.recv_old(buf=buf, handle=handle, nbytes=nbytes, offset=offset)
+        
+    def send_old(  # pylint: disable=too-many-arguments
         self, buf: Buffer, handle: int, nbytes: int, offset: int
     ) -> None:
         """Send the value in buffer to remote peer in the pair."""
@@ -820,7 +830,7 @@ class Pair(
             )
             self._pending_send.append(envelope)
 
-    def recv(  # pylint: disable=too-many-arguments
+    def recv_old(  # pylint: disable=too-many-arguments
         self, buf: Buffer, handle: int, nbytes: int, offset: int
     ) -> None:
         """Send the value in buffer to remote peer in the pair."""
@@ -847,7 +857,7 @@ class Pair(
                 "The pair socket must be in the CONNECTED state "
                 "before calling the send or recv."
             )
-
+        
     # The order of the function calling must follows:
     # send => (write =>) _write and recv => read => _read
     # Send/Recv must be called under main thread, but write/read can be either
