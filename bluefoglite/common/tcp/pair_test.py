@@ -154,25 +154,33 @@ def test_send_recv_array(empty_address, array_list, reverse_send_recv):
         )
         store.set(rank, pair.self_address)
         pair.connect(store.get(1 - rank))
+        pair.new_style = True
 
         hm = HandleManager.getInstance()
         send_rank, recv_rank = (0, 1) if reverse_send_recv else (1, 0)
 
         if rank == send_rank:
+            print(f"Send rank {rank} with fd {pair.sock.fileno()}")
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[0])
-            pair.send(buf, handle, nbytes=buf.buffer_length, offset=0)
+            pair.send_new(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
+            print(f"{rank}: send done.", flush=True)
         elif rank == recv_rank:
+            print(f"Recv rank {rank} with fd {pair.sock.fileno()}")
             handle = hm.allocate()
             buf = _build_sbuf_from_array(array_list[1])
-            pair.recv(buf, handle, nbytes=buf.buffer_length, offset=0)
+            pair.recv_new(buf, handle, nbytes=buf.buffer_length, offset=0)
             hm.wait(handle=handle)
+            print(f"{rank}: recv done.", flush=True)
             np.testing.assert_allclose(array_list[1], array_list[0])
+            print(f"{rank}: recv done and pass test.", flush=True)
         pair.close()
+        print(f"{rank}: close pair.", flush=True)
         event_loop.close()
+        print(f"{rank}: cleanup event_loop.", flush=True)
 
-    errors = multi_thread_help(size=2, fn=send_recv_array)
+    errors = multi_thread_help(size=2, fn=send_recv_array, timeout=10)
 
     for error in errors:
         raise error

@@ -49,7 +49,6 @@ class EventLoop:
             print("Event Loop is already running")
             return
 
-        # print('start running loop')
         self.running_thread = threading.Thread(
             target=EventLoop._run, args=(self,), daemon=True
         )

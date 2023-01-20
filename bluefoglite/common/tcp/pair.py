@@ -107,6 +107,13 @@ class Envelope:  # pylint: disable=too-many-instance-attributes
     num_elements: Optional[int] = None
     shape: Optional[Tuple[int, ...]] = None
 
+    def __str__(self) -> str:
+        m_type = message_pb2.MessageType.Name(self.message_type)
+        return (
+            f"Envelope(type={m_type}, handle={self.handle}, "
+            f"offset={self.offset}, nbytes={self.nbytes})"
+        )
+
 
 # Fix length-header
 Header = collections.namedtuple("Header", ["tag", "content_length"])
@@ -239,6 +246,18 @@ class WriteStatus:
 
         data_view = self.envelope.buf.buffer_view[offset:]
         return min(num_bytes_to_write, MAX_ONE_TIME_RECV_BYTES), data_view
+
+
+def handleFailureSend(err: Exception, envelope: Envelope) -> None:
+    if not err:
+        return
+
+    if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+        assert envelope.buf is not None
+        envelope.buf.handleCompletion(
+            envelope.handle,
+            EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
+        )
 
 
 class Pair(
@@ -399,15 +418,6 @@ class Pair(
 
     def close(self) -> None:
         with self._mutex:
-            # if self.self_rank < self.peer_rank:
-            #     # this is the server side, do nothing but wait the peer close
-            #     # then trigger the read event.
-            #     logger.error("Close to peer %d as server", self.peer_rank)
-            #     self.waitUntilClosed()
-            #     logger.error("Close to peer %d as server done", self.peer_rank)
-            # else:
-            #     logger.error("Close to peer %d as client", self.peer_rank)
-            #     # this is the client side, actively close the socket
             if self.sock is None:
                 return
             try:
@@ -418,7 +428,7 @@ class Pair(
                 Logger.get().warning(e)
             finally:
                 self.changeState(PairState.CLOSED)
-            Logger.get().info("Close to peer %d as client done", self.peer_rank)
+            Logger.get().info("Close peer %d as client done", self.peer_rank)
 
     def changeState(self, next_state: PairState) -> None:
         if next_state == PairState.CLOSED:
@@ -539,7 +549,56 @@ class Pair(
 
         self.changeState(PairState.CONNECTED)
 
+    def postWriteProcessing(self, envelope: Envelope) -> None:
+        if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
+            assert envelope.buf is not None
+            envelope.buf.handleCompletion(envelope.handle)
+        elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
+            pass
+        elif envelope.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
+            pass
+        else:
+            raise RuntimeError(
+                f"Unexpected the message type {envelope.message_type} encounter"
+                " when write to sock"
+            )
+
+    def postReadProcessing(self, header: Header, envelope: Envelope) -> None:
+        if header.message_type == message_pb2.MessageType.SEND_BUFFER:
+            Logger.get().info(f"{self.self_rank}: Read for {envelope} is done.")
+            assert envelope.buf is not None
+            envelope.buf.handleCompletion(envelope.handle)
+            self._read_to_recv = None
+        elif header.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
+            Logger.get().info(f"{self.self_rank}: Read for {envelope} is done. 222")
+            if self._pending_recv and self._read_to_recv is None:
+                self._read_to_recv = self._pending_recv.popleft()
+                self.sent_notify_recv_ready(
+                    self._read_to_recv.nbytes, self._read_to_recv.offset
+                )
+            else:
+                # self._remote_ready_to_send.append(header)
+                pass
+        elif header.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
+            Logger.get().info(f"{self.self_rank}: Read for {envelope} is done. 333")
+            if self._pending_send:  # We can send immediately
+                envelope = self._pending_send.popleft()
+                err = self._write(envelope)
+                handleFailureSend(err, envelope)
+                if err:
+                    return
+                self.postWriteProcessing(envelope=envelope)
+            else:
+                self._remote_ready_to_recv.append(header)
+        else:
+            Logger.get().info(f"{self.self_rank}:Read for {envelope} is done. 444")
+            raise RuntimeError(
+                f"Unexpected the message type {header.message_type} encounter"
+                " when read from sock"
+            )
+
     def read(self) -> None:  # pylint: disable=too-many-branches
+        # Logger.get().info(f"{self.self_rank}: Trigger reading")
         # Pre-processing
         if self.new_style:
             placeholder_envelope = Envelope(
@@ -555,6 +614,8 @@ class Pair(
             else:
                 return
 
+        # Logger.get().info(f"{self.self_rank}: Read for {envelope} is done. AAA")
+
         # Processing the read event
         err, header = self._read(envelope)
         # TODO We need the mutex over here!
@@ -567,40 +628,27 @@ class Pair(
                 )
             return
         if header is None:
-            Logger.get().info(
-                "There is not header returned after successful _read."
-                "This should not happen but we just skip processing for this case."
-            )
+            # Logger.get().info(f"{self.self_rank}: Read for {envelope} is done. BBB")
+            # Logger.get().info(
+            #     "There is not header returned after successful _read."
+            #     "This should not happen but we just skip processing for this case."
+            # )
             return
 
+        # Logger.get().info(
+        #     f"{self.self_rank}: Read for {envelope} is done. Receive header {header}. CCC"
+        # )
         # Post-processing (Old style only contains header=SEND_BUFFER case)
-        if header.message_type == message_pb2.MessageType.SEND_BUFFER:
-            self._read_to_recv = None
-            assert envelope.buf is not None
-            envelope.buf.handleCompletion(envelope.handle)
-        elif header.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
-            if self._pending_recv and self._read_to_recv is None:
-                self._read_to_recv = self._pending_recv.popleft()
-            else:
-                # self._remote_ready_to_send.append(header)
-                pass
-        elif header.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
-            if self._pending_send:
-                envelope = self._pending_send.popleft()
-                self._write(envelope)
-            else:
-                self._remote_ready_to_recv.append(header)
-        else:
-            raise RuntimeError(
-                f"Unexpected the message type {header.message_type} encounter"
-                " when read from sock"
-            )
+        self.postReadProcessing(header=header, envelope=envelope)
 
     def write(self) -> None:
         # Pre-processing
         if self.new_style:
-            if self._read_to_recv:
-                envelope = self._read_to_recv
+            if self._remote_ready_to_recv and self._pending_send:
+                header = self._remote_ready_to_recv.popleft()
+                # TODO check the header and find the proper sending envelope
+                del header
+                envelope = self._pending_send.popleft()
             else:
                 return
         else:
@@ -611,28 +659,12 @@ class Pair(
 
         # Processing the write event
         err = self._write(envelope)
+        handleFailureSend(err, envelope)
         if err:
-            if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
-                assert envelope.buf is not None
-                envelope.buf.handleCompletion(
-                    envelope.handle,
-                    EventStatus(status=EventStatusEnum.ERROR, err=str(err)),
-                )
             return
 
         # Post-processing (Old style only contains envelope=SEND_BUFFER case)
-        if envelope.message_type == message_pb2.MessageType.SEND_BUFFER:
-            assert envelope.buf is not None
-            envelope.buf.handleCompletion(envelope.handle)
-        elif envelope.message_type == message_pb2.MessageType.NOTIFY_SEND_READY:
-            pass
-        elif envelope.message_type == message_pb2.MessageType.NOTIFY_RECV_READY:
-            pass
-        else:
-            raise RuntimeError(
-                f"Unexpected the message type {envelope.message_type} encounter"
-                " when write to sock"
-            )
+        self.postWriteProcessing(envelope=envelope)
 
     # _read and _write are long complicated functions due the error handling.
     # See here https://www.python.org/dev/peps/pep-3151/#new-exception-classes
@@ -690,14 +722,18 @@ class Pair(
             raise RuntimeError("The sock in pair is not created.")
         read_status = ReadStatus(envelope=envelope)
 
-        Logger.get().debug("handle read envelope %s", envelope)
+        Logger.get().debug(f"{self.self_rank}: handle read envelope %s", envelope)
         while True:
             num_bytes_to_read, buff_view = read_status.prepare_read()
             if num_bytes_to_read == 0:
                 break
             try:
                 num_bytes_recv = self.sock.recv_into(buff_view, num_bytes_to_read)
-                Logger.get().debug("Recv done: %d", num_bytes_recv)
+                # Logger.get().debug(
+                #     f"{self.self_rank}: Recv done: num_bytes -- %d", num_bytes_recv
+                # )
+                if num_bytes_recv == 0:
+                    break
             except BlockingIOError as e:
                 # Resource temporarily unavailable (errno EWOULDBLOCK)
                 Logger.get().debug("_read encountered %s", e)
@@ -721,8 +757,6 @@ class Pair(
                 raise e
             else:
                 read_status.nbytes += num_bytes_recv
-
-        Logger.get().debug("handle read envelope done: %s", envelope)
         return None, read_status.header
 
     def _write(self, envelope: Envelope) -> Optional[Exception]:
@@ -730,7 +764,7 @@ class Pair(
         if self.sock is None:
             raise RuntimeError("The sock in pair is not created.")
         write_status = WriteStatus(envelope=envelope)
-        Logger.get().debug("handle write envelope %s", envelope)
+        Logger.get().debug(f"{self.self_rank}: handle write envelope %s", envelope)
 
         while True:
             num_bytes_to_write, buff_view = write_status.prepare_write()
@@ -760,7 +794,9 @@ class Pair(
             else:
                 write_status.nbytes += num_bytes_sent
 
-        Logger.get().debug("handle write envelope done: %s", envelope)
+        Logger.get().debug(
+            f"{self.self_rank}: handle write envelope done: %s", envelope
+        )
         return None
 
     def send(  # pylint: disable=too-many-arguments
@@ -834,9 +870,11 @@ class Pair(
                 num_elements=np.prod(buf.shape),
             )
             self._pending_send.append(envelope)
+            Logger().get().debug("send_new start")
 
             # Case 1: no remote ready signal. Notify and wait.
             if not self._remote_ready_to_recv:
+                Logger().get().debug("send_new create notification")
                 self.sent_notify_send_ready(nbytes, offset)
                 return
 
@@ -846,8 +884,12 @@ class Pair(
                 header = self._remote_ready_to_recv.popleft()
                 # TODO check the header and find proper envelope.
                 del header
-                sent_envelope = self._pending_send.popleft()
-                self._write(envelope=sent_envelope)
+                s_envelope = self._pending_send.popleft()
+                err = self._write(envelope=s_envelope)
+                handleFailureSend(err, envelope)
+                if err:
+                    return
+                self.postWriteProcessing(envelope=envelope)
 
     def recv_new(self, buf: Buffer, handle: int, nbytes: int, offset: int) -> None:
         with self._mutex:
@@ -867,7 +909,9 @@ class Pair(
             )
             self._pending_recv.append(envelope)
 
+            Logger().get().debug("recv_new start")
             if self._read_to_recv:  # It means there is no pending recv.
+                Logger().get().debug("recv_new create notification")
                 # TODO check the header and envelope.
                 self._read_to_recv = self._pending_recv.popleft()
                 self.sent_notify_recv_ready(
@@ -875,25 +919,23 @@ class Pair(
                 )
 
     def sent_notify_send_ready(self, nbytes: int, offset: int) -> None:
-        with self._mutex:
-            self._check_connected()
-            envelope = Envelope(
-                message_type=message_pb2.NOTIFY_SEND_READY,
-                buf=None,  # Not used
-                handle=-1,
-                nbytes=nbytes,
-                offset=offset,
-            )
-            self._write(envelope=envelope)
+        """Write the send ready notification to peer. Must call under the mutex."""
+        envelope = Envelope(
+            message_type=message_pb2.NOTIFY_SEND_READY,
+            buf=None,  # Not used
+            handle=-1,
+            nbytes=nbytes,
+            offset=offset,
+        )
+        self._write(envelope=envelope)
 
     def sent_notify_recv_ready(self, nbytes: int, offset: int) -> None:
-        with self._mutex:
-            self._check_connected()
-            envelope = Envelope(
-                message_type=message_pb2.NOTIFY_RECV_READY,
-                buf=None,  # Not used
-                handle=-1,
-                nbytes=nbytes,
-                offset=offset,
-            )
-            self._write(envelope=envelope)
+        """Write the recv ready notification to peer. Must call under the mutex."""
+        envelope = Envelope(
+            message_type=message_pb2.NOTIFY_RECV_READY,
+            buf=None,  # Not used
+            handle=-1,
+            nbytes=nbytes,
+            offset=offset,
+        )
+        self._write(envelope=envelope)
