@@ -20,14 +20,6 @@ from typing import Dict, List, Optional
 from bluefoglite.common import const
 
 
-def list_loggers():
-    for nm, lgr in logging.Logger.manager.loggerDict.items():
-        print("+ [%-20s] %s " % (nm, lgr))
-        if not isinstance(lgr, logging.PlaceHolder):
-            for h in lgr.handlers:
-                print("     %s" % h)
-
-
 class DummyLogger:
     def __getattr__(self, name):
         return lambda *x: None
@@ -91,8 +83,8 @@ class Logger:
                 if 0 <= int(rank) < int(world_size):
                     continue
                 return False
-        except RuntimeError:
-            raise RuntimeError("BlueFogLite world size is not set.")
+        except RuntimeError as exc:
+            raise RuntimeError("BlueFogLite world size is not set.") from exc
         return True
 
     @classmethod

@@ -104,7 +104,7 @@ def main():
 
         stdout = None
         stderr = subprocess.STDOUT
-        p_ctx = subprocess.Popen(
+        p_ctx = subprocess.Popen(  # pylint: disable=consider-using-with
             args.command, shell=False, env=env, stdout=stdout, stderr=stderr
         )
         p_ctx_list.append(p_ctx)

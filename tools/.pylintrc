@@ -61,7 +61,6 @@ confidence=
 # no Warning level messages displayed, use "--disable=all --enable=classes
 # --disable=W".
 disable=
-    bad-continuation,
     duplicate-code,
     fixme,
     import-error,
@@ -86,19 +85,15 @@ enable=
     consider-merging-isinstance,
     continue-in-finally,
     dangerous-default-value,
-    docstyle,
     duplicate-argument-name,
     expression-not-assigned,
-    f-string-without-interpolation
+    f-string-without-interpolation,
     function-redefined,
     inconsistent-mro,
     init-is-generator,
     line-too-long,
     lost-exception,
     missing-kwoa,
-    missing-param-doc,
-    missing-raises-doc,
-    mixed-indentation,
     mixed-line-endings,
     not-callable,
     no-value-for-parameter,
@@ -106,7 +101,6 @@ enable=
     not-in-loop,
     pointless-statement,
     redefined-builtin,
-    relative-import,
     return-arg-in-generator,
     return-in-init,
     return-outside-function,
@@ -126,7 +120,6 @@ enable=
     unused-variable,
     unused-wildcard-import,
     wildcard-import,
-    wrong-or-nonexistent-copyright-notice,
     wrong-import-order,
     wrong-import-position,
     yield-outside-function

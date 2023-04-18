@@ -16,14 +16,10 @@
 import dataclasses
 from collections.abc import Iterable
 from enum import Enum
-import itertools
-import json
 import os
-import pickle
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import networkx as nx
-import numpy as np
 import torch
 import torch.distributed as dist
 
@@ -65,9 +61,7 @@ class BlueFogLiteGroup:
         return self._process_group
 
     def is_initialized(self) -> bool:
-        if self._process_group is None:
-            return False
-        return dist.is_initialized(self._process_group)
+        return self._process_group is not None
 
     def init_from_process_group(self, process_group: dist.ProcessGroup):
         assert isinstance(process_group, dist.ProcessGroup)

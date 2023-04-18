@@ -55,7 +55,7 @@ class HandleManager:
     def __init__(self):
         if self.__instance is not None:
             raise RuntimeError(
-                "HandleManager is singleton and " "should be used with getInstance()."
+                "HandleManager is singleton and should be used with getInstance()."
             )
         self.status: Dict[int, EventStatus] = {}  # Handle -> Finished Or Not
         self._last_handle = -1  # should be atomic<int> but it is fine in python
@@ -94,10 +94,10 @@ class HandleManager:
 
     def wait(self, handle: int, timeout: int = None) -> bool:
         def _is_finished():
-            return (
-                self.status[handle].status == EventStatusEnum.DONE
-                or self.status[handle].status == EventStatusEnum.ERROR
-                or self.status[handle].status == EventStatusEnum.WARN
+            return self.status[handle].status in (
+                EventStatusEnum.DONE,
+                EventStatusEnum.ERROR,
+                EventStatusEnum.WARN,
             )
 
         with self.mutex:

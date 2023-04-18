@@ -34,7 +34,7 @@ def test_none_input():
     # Protobuf will use the default value.
     # pylint: disable=no-member
     assert h.ndim == 0
-    assert h.shape == []
+    assert not h.shape
     assert h.dtype == 0
     assert h.itemsize == 0
     assert h.num_elements == 0

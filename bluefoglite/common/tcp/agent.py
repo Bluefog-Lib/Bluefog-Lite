@@ -36,7 +36,7 @@ class Agent:
     def __del__(self):
         self.close()
 
-    def createAgentAddress(  # pylint: disable=no-self-use
+    def createAgentAddress(
         self, *, addr: Optional[TAddress] = None
     ) -> SocketFullAddress:
         if addr is None:

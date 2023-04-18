@@ -36,8 +36,6 @@ class FileStore:
     def set(self, key: str, value: Any):
         if self._check_exist(key):
             Logger.get().warning("FileStore: overwrite the file")
-        else:
-            open(self._get_key_path(key), "a").close()
         with open(self._get_key_path(key), "wb") as f:
             pickle.dump(value, f)
 

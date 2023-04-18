@@ -13,11 +13,9 @@
 # limitations under the License.
 # ==============================================================================
 
-from concurrent.futures import Future
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 import networkx as nx
-import numpy as np
 import torch
 import torch.distributed as dist
 
