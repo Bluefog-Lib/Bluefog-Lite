@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-from typing import Optional
+from typing import Any, Optional
 import numpy as np
 
 from bluefoglite.common.tcp import message_pb2  # type: ignore
@@ -23,7 +23,7 @@ TDtype = int  # int because protobuf encode Enum as integer number
 
 
 def numpy_to_bfl_dtype(  # pylint: disable=too-many-branches
-    np_dtype: np.ScalarType,
+    np_dtype: Any,
 ) -> TDtype:
     if np_dtype == np.uint8:
         ret_dtype = message_pb2.BFL_UINT8
@@ -45,8 +45,8 @@ def numpy_to_bfl_dtype(  # pylint: disable=too-many-branches
         ret_dtype = message_pb2.BFL_FLOAT64
     elif np_dtype == np.float128:
         ret_dtype = message_pb2.BFL_FLOAT128
-    elif np_dtype == np.bool:
-        ret_dtype = message_pb2.BFL_BOOL
+    # elif np_dtype == np.bool:
+    #     ret_dtype = message_pb2.BFL_BOOL
     elif np_dtype == np.byte:
         ret_dtype = message_pb2.BFL_BYTE
     else:
@@ -56,7 +56,8 @@ def numpy_to_bfl_dtype(  # pylint: disable=too-many-branches
 
 def bfl_to_numpy_dtype(  # pylint: disable=too-many-branches
     bfl_dtype: Optional[TDtype],
-) -> np.ScalarType:
+) -> Any:
+    ret_dtype: Any = None  # type: ignore
     if bfl_dtype == message_pb2.BFL_UINT8:
         ret_dtype = np.uint8
     elif bfl_dtype == message_pb2.BFL_INT8:
@@ -77,8 +78,8 @@ def bfl_to_numpy_dtype(  # pylint: disable=too-many-branches
         ret_dtype = np.float64
     elif bfl_dtype == message_pb2.BFL_FLOAT128:
         ret_dtype = np.float128
-    elif bfl_dtype == message_pb2.BFL_BOOL:
-        ret_dtype = np.bool
+    # elif bfl_dtype == message_pb2.BFL_BOOL:
+    #     ret_dtype = np.bool
     elif bfl_dtype == message_pb2.BFL_BYTE:
         ret_dtype = np.byte
     else:

@@ -683,7 +683,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 ndim=buf.ndim,
                 itemsize=buf.itemsize,
                 dtype=buf.dtype,
-                num_elements=np.prod(buf.shape),
+                num_elements=np.prod(buf.shape),  # type: ignore
             )
             self._pending_send.append(envelope)
 
@@ -708,7 +708,7 @@ class Pair(Handler):  # pylint: disable=too-many-instance-attributes
                 ndim=buf.ndim,
                 itemsize=buf.itemsize,
                 dtype=buf.dtype,
-                num_elements=np.prod(buf.shape),
+                num_elements=np.prod(buf.shape),  # type: ignore
             )
             self._pending_recv.append(envelope)
 

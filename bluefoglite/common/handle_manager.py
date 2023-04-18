@@ -92,7 +92,7 @@ class HandleManager:
         with self.mutex:
             return self.status.pop(handle)
 
-    def wait(self, handle: int, timeout: int = None) -> bool:
+    def wait(self, handle: int, timeout: Optional[float] = None) -> bool:
         def _is_finished():
             return self.status[handle].status in (
                 EventStatusEnum.DONE,

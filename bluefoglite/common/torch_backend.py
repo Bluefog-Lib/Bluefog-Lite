@@ -235,7 +235,7 @@ class BlueFogLiteGroup:
         inplace: bool = True,
     ) -> torch.Tensor:
         opts = dist.AllreduceOptions()
-        opts.reduceOp = op if op != ReduceOp.AVG else dist.ReduceOp.SUM
+        opts.reduceOp = op.value if op != ReduceOp.AVG else dist.ReduceOp.SUM
         _tensor = tensor if inplace else tensor.detach().clone()
         self.process_group.allreduce([_tensor], opts).wait()
 

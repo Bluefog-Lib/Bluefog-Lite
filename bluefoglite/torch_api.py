@@ -80,13 +80,13 @@ def recv(tensor, src, *, tag: int = 0, group=None) -> None:
 def isend(tensor, dst, *, tag: int = 0, group=None) -> dist.Work:
     if group is None:
         group = _global_group
-    group.send(tensor=tensor, dst=dst, tag=tag)
+    return group.send(tensor=tensor, dst=dst, tag=tag)
 
 
 def irecv(tensor, src, *, tag: int = 0, group=None) -> dist.Work:
     if group is None:
         group = _global_group
-    group.recv(tensor=tensor, src=src, tag=tag)
+    return group.recv(tensor=tensor, src=src, tag=tag)
 
 
 def set_topology(topology: nx.DiGraph, *, group=None):
@@ -125,7 +125,7 @@ def broadcast(
 
 def allreduce(
     tensor: torch.Tensor,
-    op: dist.ReduceOp = ReduceOp.AVG,
+    op: ReduceOp = ReduceOp.AVG,
     *,
     inplace: bool = False,
     group=None,

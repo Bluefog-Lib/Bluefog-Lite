@@ -19,7 +19,7 @@ import os
 import pickle
 import threading
 import time
-from typing import Any, List
+from typing import Any, List, Optional
 from bluefoglite.common.logger import Logger
 
 
@@ -42,7 +42,7 @@ class FileStore:
     def _check_exist(self, key: str) -> bool:
         return os.path.exists(self._get_key_path(key))
 
-    def get(self, key: str, timeout: int = 100):
+    def get(self, key: str, timeout: float = 100.0):
         self.wait([key], timeout)
         with open(self._get_key_path(key), "rb") as f:
             tried = 0
@@ -64,7 +64,7 @@ class FileStore:
         os.remove(self._get_key_path(key))
         return True
 
-    def wait(self, keys: List[str], timeout: int = None):
+    def wait(self, keys: List[str], timeout: Optional[float] = None):
         timeout_t = time.time() + timeout if timeout is not None else None
         remain_keys = [key for key in keys if not self._check_exist(key)]
         while remain_keys:
@@ -92,7 +92,7 @@ class InMemoryStore:
         self._cv = threading.Condition(self._mutex)
         self.store = {}
 
-    def get(self, key: str, timeout: int = 100):
+    def get(self, key: str, timeout: float = 100.0):
         self.wait([key], timeout)
         with self._mutex:
             return self.store.get(key, None)
@@ -110,7 +110,7 @@ class InMemoryStore:
             self._cv.notify_all()
             return True
 
-    def wait(self, keys: List[str], timeout: int = None):
+    def wait(self, keys: List[str], timeout: Optional[float] = None):
         timeout_t = time.time() + timeout if timeout is not None else None
         remain_keys = [key for key in keys if key not in self.store]
         with self._mutex:
