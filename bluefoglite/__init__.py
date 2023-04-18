@@ -18,3 +18,5 @@ from bluefoglite.common.topology import (
     RingGraph,
     StarGraph,
 )
+
+import bluefoglite.torch_api as bluefoglite_torch

@@ -98,6 +98,10 @@ def main():
         env["BFL_WORLD_RANK"] = str(i)
         env["BFL_WORLD_SIZE"] = str(args.np)
         env["BFL_FILE_STORE"] = shared_file_dir
+        # TODO fix this
+        env["MASTER_ADDR"] = "127.0.0.1"
+        env["MASTER_PORT"] = "29500"
+
         stdout = None
         stderr = subprocess.STDOUT
         p_ctx = subprocess.Popen(
