@@ -15,9 +15,10 @@
 
 import dataclasses
 from collections.abc import Iterable
+import functools
 from enum import Enum
 import os
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable
 
 import networkx as nx
 import torch
@@ -45,6 +46,25 @@ class ReduceOp(Enum):
     BOR = (dist.ReduceOp.BOR,)
     BXOR = (dist.ReduceOp.BXOR,)
     PREMUL_SUM = (dist.ReduceOp.PREMUL_SUM,)
+
+
+class AsyncWork:
+    def __init__(
+        self,
+        work: Union[dist.Work, List[dist.Work]],
+        post_func: Optional[Callable] = None,
+    ):
+        self._work = work
+        self._post_func = post_func
+
+    def wait(self) -> Any:
+        if isinstance(self._work, Iterable):
+            for w in self._work:
+                w.wait()
+        else:
+            self._work.wait()
+        if self._post_func:
+            return self._post_func()
 
 
 class BlueFogLiteGroup:
@@ -146,13 +166,13 @@ class BlueFogLiteGroup:
         )
         return True
 
-    def isend(self, tensor: torch.Tensor, dst: int, tag: int = 0) -> dist.Work:
+    def isend(self, tensor: torch.Tensor, dst: int, tag: int = 0) -> AsyncWork:
         self._check_rank(dst)
-        return self.process_group.send([tensor], dstRank=dst, tag=tag)
+        return AsyncWork(work=self.process_group.send([tensor], dstRank=dst, tag=tag))
 
-    def irecv(self, tensor: torch.Tensor, src: int, tag: int = 0) -> dist.Work:
+    def irecv(self, tensor: torch.Tensor, src: int, tag: int = 0) -> AsyncWork:
         self._check_rank(src)
-        return self.process_group.recv([tensor], srcRank=src, tag=tag)
+        return AsyncWork(work=self.process_group.recv([tensor], srcRank=src, tag=tag))
 
     def send(self, tensor: torch.Tensor, dst: int, tag: int = 0) -> None:
         self.isend(tensor=tensor, dst=dst, tag=tag).wait()
@@ -160,14 +180,10 @@ class BlueFogLiteGroup:
     def recv(self, tensor: torch.Tensor, src: int, tag: int = 0) -> None:
         self.irecv(tensor=tensor, src=src, tag=tag).wait()
 
-    def wait(self, work: Union[dist.Work, List[dist.Work]]):
-        if isinstance(work, Iterable):
-            for w in work:
-                w.wait()
-        else:
-            work.wait()
+    def wait(self, work: AsyncWork) -> Any:
+        return work.wait()
 
-    def neighbor_allreduce(
+    def neighbor_allreduce_nonblocking(
         self,
         tensor: torch.Tensor,
         *,
@@ -175,7 +191,7 @@ class BlueFogLiteGroup:
         src_weights: Optional[Dict[int, float]],
         dst_weights: Optional[Dict[int, float]],
         inplace: bool = False,
-    ) -> torch.Tensor:
+    ) -> AsyncWork:
         # TODO 1. add topology check service.
         if (
             self_weight is None
@@ -205,19 +221,51 @@ class BlueFogLiteGroup:
                 dist.P2POp(dist.irecv, tmp_tensor, peer=src, group=self.process_group)
             )
         reqs = dist.batch_isend_irecv(op_list)
-        for req in reqs:
-            req.wait()
 
-        tensor_ = tensor if inplace else tensor.detach().clone()
-        tensor_.mul_(self_weight)
-        for src, weight in src_weights.items():
-            tensor_.add_(tmp_recv_tensors[src].mul_(weight))
-        del tmp_recv_tensors
-        return tensor_
+        def post_func(
+            tensor: torch.Tensor,
+            tmp_recv_tensors: Dict[int, torch.Tensor],
+            self_weight: float,
+            src_weights: Dict[int, float],
+        ) -> torch.Tensor:
+            tensor_ = tensor if inplace else tensor.detach().clone()
+            tensor_.mul_(self_weight)
+            for src, weight in src_weights.items():
+                tensor_.add_(tmp_recv_tensors[src].mul_(weight))
+            del tmp_recv_tensors
+            return tensor_
 
-    def broadcast(
-        self, tensor: torch.Tensor, root_rank: int, inplace: bool = True
+        return AsyncWork(
+            reqs,
+            functools.partial(
+                post_func,
+                tensor=tensor,
+                tmp_recv_tensors=tmp_recv_tensors,
+                self_weight=self_weight,
+                src_weights=src_weights,
+            ),
+        )
+
+    def neighbor_allreduce(
+        self,
+        tensor: torch.Tensor,
+        *,
+        self_weight: Optional[float],
+        src_weights: Optional[Dict[int, float]],
+        dst_weights: Optional[Dict[int, float]],
+        inplace: bool = False,
     ) -> torch.Tensor:
+        return self.neighbor_allreduce_nonblocking(
+            tensor=tensor,
+            self_weight=self_weight,
+            src_weights=src_weights,
+            dst_weights=dst_weights,
+            inplace=inplace,
+        ).wait()
+
+    def broadcast_nonblocking(
+        self, tensor: torch.Tensor, root_rank: int, inplace: bool = True
+    ) -> AsyncWork:
         opts = dist.BroadcastOptions()
         opts.rootRank = root_rank
         opts.rootTensor = 0
@@ -225,8 +273,39 @@ class BlueFogLiteGroup:
             _tensor = tensor
         else:
             _tensor = tensor if inplace else tensor.detach().clone()
-        self.process_group.broadcast([_tensor], opts).wait()
-        return _tensor
+
+        def post_func(tensor: torch.Tensor) -> torch.Tensor:
+            return tensor
+
+        return AsyncWork(
+            self.process_group.broadcast([_tensor], opts),
+            functools.partial(post_func, tensor=_tensor),
+        )
+
+    def broadcast(
+        self, tensor: torch.Tensor, root_rank: int, inplace: bool = True
+    ) -> torch.Tensor:
+        return self.broadcast_nonblocking(
+            tensor=tensor, root_rank=root_rank, inplace=inplace
+        ).wait()
+
+    def allreduce_nonblocking(
+        self,
+        tensor: torch.Tensor,
+        op: ReduceOp = ReduceOp.AVG,
+        inplace: bool = True,
+    ) -> AsyncWork:
+        opts = dist.AllreduceOptions()
+        opts.reduceOp = op.value if op != ReduceOp.AVG else dist.ReduceOp.SUM
+        _tensor = tensor if inplace else tensor.detach().clone()
+
+        def post_func(tensor: torch.Tensor, op: ReduceOp, size: int) -> torch.Tensor:
+            return tensor.mul_(1 / size) if op == ReduceOp.AVG else tensor
+
+        return AsyncWork(
+            self.process_group.allreduce([_tensor], opts),
+            functools.partial(post_func, tensor=_tensor, op=op, size=self.size()),
+        )
 
     def allreduce(
         self,
@@ -234,9 +313,4 @@ class BlueFogLiteGroup:
         op: ReduceOp = ReduceOp.AVG,
         inplace: bool = True,
     ) -> torch.Tensor:
-        opts = dist.AllreduceOptions()
-        opts.reduceOp = op.value if op != ReduceOp.AVG else dist.ReduceOp.SUM
-        _tensor = tensor if inplace else tensor.detach().clone()
-        self.process_group.allreduce([_tensor], opts).wait()
-
-        return _tensor.mul_(1 / self.size()) if op == ReduceOp.AVG else _tensor
+        return self.allreduce_nonblocking(tensor=tensor, op=op, inplace=inplace).wait()

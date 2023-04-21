@@ -19,7 +19,7 @@ import networkx as nx
 import torch
 import torch.distributed as dist
 
-from bluefoglite.common.torch_backend import BlueFogLiteGroup, ReduceOp
+from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
 
 _global_group = BlueFogLiteGroup()
 
@@ -35,7 +35,10 @@ __all__ = [
     "irecv",
     "set_topology",
     "neighbor_allreduce",
+    "neighbor_allreduce_nonblocking",
+    "broadcast_nonblocking",
     "broadcast",
+    "allreduce_nonblocking",
     "allreduce",
 ]
 # import basic methods and wrap it with default global group.
@@ -101,12 +104,32 @@ def neighbor_allreduce(
     self_weight: Optional[float] = None,
     src_weights: Optional[Dict[int, float]] = None,
     dst_weights: Optional[Dict[int, float]] = None,
-    inplace: bool = True,
+    inplace: bool = False,
     group=None,
 ) -> torch.Tensor:
     if group is None:
         group = _global_group
     return group.neighbor_allreduce(
+        tensor=tensor,
+        self_weight=self_weight,
+        src_weights=src_weights,
+        dst_weights=dst_weights,
+        inplace=inplace,
+    )
+
+
+def neighbor_allreduce_nonblocking(
+    tensor: torch.Tensor,
+    *,
+    self_weight: Optional[float] = None,
+    src_weights: Optional[Dict[int, float]] = None,
+    dst_weights: Optional[Dict[int, float]] = None,
+    inplace: bool = False,
+    group=None,
+) -> AsyncWork:
+    if group is None:
+        group = _global_group
+    return group.neighbor_allreduce_nonblocking(
         tensor=tensor,
         self_weight=self_weight,
         src_weights=src_weights,
@@ -123,6 +146,16 @@ def broadcast(
     return group.broadcast(tensor=tensor, root_rank=root_rank, inplace=inplace)
 
 
+def broadcast_nonblocking(
+    tensor: torch.Tensor, root_rank: int, *, inplace: bool = False, group=None
+) -> AsyncWork:
+    if group is None:
+        group = _global_group
+    return group.broadcast_nonblocking(
+        tensor=tensor, root_rank=root_rank, inplace=inplace
+    )
+
+
 def allreduce(
     tensor: torch.Tensor,
     op: ReduceOp = ReduceOp.AVG,
@@ -133,3 +166,15 @@ def allreduce(
     if group is None:
         group = _global_group
     return group.allreduce(tensor=tensor, op=op, inplace=inplace)
+
+
+def allreduce_nonblocking(
+    tensor: torch.Tensor,
+    op: ReduceOp = ReduceOp.AVG,
+    *,
+    inplace: bool = False,
+    group=None,
+) -> AsyncWork:
+    if group is None:
+        group = _global_group
+    return group.allreduce_nonblocking(tensor=tensor, op=op, inplace=inplace)
