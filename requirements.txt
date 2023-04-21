@@ -1,3 +1,4 @@
-networkx
+networkx < 3.0
 numpy
 protobuf
+torch

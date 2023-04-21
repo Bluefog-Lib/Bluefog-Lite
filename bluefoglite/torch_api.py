@@ -41,10 +41,10 @@ __all__ = [
 # import basic methods and wrap it with default global group.
 
 
-def init(group=None):
+def init(backend: str = "gloo", *, group=None):
     if group is None:
         group = _global_group
-    group.init()
+    group.init(backend=backend)
 
 
 def shutdown(group=None):
@@ -101,7 +101,7 @@ def neighbor_allreduce(
     self_weight: Optional[float] = None,
     src_weights: Optional[Dict[int, float]] = None,
     dst_weights: Optional[Dict[int, float]] = None,
-    inplace=True,
+    inplace: bool = True,
     group=None,
 ) -> torch.Tensor:
     if group is None:
