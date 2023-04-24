@@ -57,7 +57,7 @@ class AsyncWork:
         self._work = work
         self._post_func = post_func
 
-    def wait(self) -> Any:
+    def wait(self) -> Optional[Any]:
         if isinstance(self._work, Iterable):
             for w in self._work:
                 w.wait()
@@ -65,6 +65,7 @@ class AsyncWork:
             self._work.wait()
         if self._post_func:
             return self._post_func()
+        return None
 
 
 class BlueFogLiteGroup:

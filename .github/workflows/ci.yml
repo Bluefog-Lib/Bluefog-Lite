@@ -94,9 +94,8 @@ jobs:
       run: brew install coreutils  # for timeout command
     - name: Install BlueFogLite
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install -r requirements.txt
-        python -m pip install -e .
+        python3 -m pip install -r requirements.txt
+        python3 -m pip install -e .
         cat tools/requirements_dev.txt | grep pytest | xargs pip install
     - name: Unit Test
       run: |
