@@ -75,6 +75,17 @@ class BlueFogLiteGroup:
         self._topology_and_weights: Optional[TopologyAndWeights] = None
         self._process_group: Optional[dist.ProcessGroup] = None
 
+    def gloo_device_wrapper(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):   # args: self; kwargs: tensor, self_weight, src_weights, dst_weights, inplace
+            if args[0]._backend == "gloo":
+                device = kwargs["tensor"].device
+                kwargs["tensor"] = kwargs["tensor"].cpu()
+                return func(*args, **kwargs).to(device)
+            else:
+                return func(*args, **kwargs)
+        return wrapper
+
     @property
     def process_group(self):
         if not self._process_group:
@@ -105,7 +116,8 @@ class BlueFogLiteGroup:
             )
         self._rank = int(_world_rank_env) if rank is None else rank
         self._size = int(_world_size_env) if size is None else size
-
+        self._backend = "undefined" if backend is None else backend
+        
         dist.init_process_group(
             backend=backend,
             world_size=self._size,
@@ -247,6 +259,7 @@ class BlueFogLiteGroup:
             ),
         )
 
+    @gloo_device_wrapper
     def neighbor_allreduce(
         self,
         tensor: torch.Tensor,

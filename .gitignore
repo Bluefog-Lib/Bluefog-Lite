@@ -140,3 +140,6 @@ examples/.profile/*
 # timeline log file
 .log/*
 .profile/
+
+# output image
+img/*
