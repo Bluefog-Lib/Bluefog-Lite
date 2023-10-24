@@ -141,5 +141,7 @@ examples/.profile/*
 .log/*
 .profile/
 
-# output image
+# output
 img/*
+wandb/*
+output/*

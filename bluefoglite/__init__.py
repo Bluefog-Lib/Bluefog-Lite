@@ -19,4 +19,4 @@ from bluefoglite.common.topology import (
     StarGraph,
 )
 
-import bluefoglite.torch_api as bluefoglite_torch
+import bluefoglite.torch as bluefoglite_torch
