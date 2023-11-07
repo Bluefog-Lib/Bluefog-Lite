@@ -100,7 +100,7 @@ def main():
         env["BFL_FILE_STORE"] = shared_file_dir
         # TODO fix this
         env["MASTER_ADDR"] = "127.0.0.1"
-        env["MASTER_PORT"] = "29500"
+        env["MASTER_PORT"] = "29503"
 
         stdout = None
         stderr = subprocess.STDOUT

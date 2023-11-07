@@ -144,4 +144,5 @@ examples/.profile/*
 # output
 img/*
 wandb/*
+example/wandb/*
 output/*

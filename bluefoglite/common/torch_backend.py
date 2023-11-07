@@ -310,7 +310,7 @@ class BlueFogLiteGroup:
         inplace: bool = True,
     ) -> AsyncWork:
         opts = dist.AllreduceOptions()
-        opts.reduceOp = op.value if op != ReduceOp.AVG else dist.ReduceOp.SUM
+        opts.reduceOp = op.value[0] if op != ReduceOp.AVG else dist.ReduceOp.SUM
         _tensor = tensor if inplace else tensor.detach().clone()
 
         def post_func(tensor: torch.Tensor, op: ReduceOp, size: int) -> torch.Tensor:

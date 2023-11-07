@@ -24,7 +24,7 @@ def broadcast_parameters(params, root_rank):
     # Run asynchronous broadcasts.
     # handles = []
     for name, p in params:
-        bfl.broadcast_nonblocking(p, root_rank=root_rank)
+        bfl.broadcast_nonblocking(p, inplace=True, root_rank=root_rank).wait()
         # handle = bfl.broadcast_nonblocking_(p, root_rank, name)
         # handles.append(handle)
 

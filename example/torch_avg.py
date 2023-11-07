@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
 import bluefoglite
-import bluefoglite.torch_api as bfl
+import bluefoglite.torch as bfl
 
 import argparse
 from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp

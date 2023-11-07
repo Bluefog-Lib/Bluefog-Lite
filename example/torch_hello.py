@@ -1,6 +1,6 @@
 import torch
 import torch.distributed as dist
-import bluefoglite.torch_api as bfl
+import bluefoglite.torch as bfl
 
 bfl.init()
 print(f"I am rank {bfl.rank()} among size {bfl.size()}.")
