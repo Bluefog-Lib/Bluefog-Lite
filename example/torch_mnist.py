@@ -9,9 +9,11 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 import numpy as np
-import bluefoglite.torch as bfl
+import bluefoglite.torch_api as bfl
+import bluefoglite.utility as bfl_util
 from bluefoglite.common import topology_util
 from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
+
 
 # Training settings
 def MLP():
@@ -21,6 +23,7 @@ def MLP():
         nn.ReLU(),
         nn.Linear(256, 10),
     )
+
 
 cuda = torch.cuda.is_available()
 seed = 42
@@ -36,7 +39,8 @@ bfl.set_topology(topo)
 
 if bfl.rank() == 0:
     import wandb
-    wandb.init(project='bfl-test', name='torch_mnist')
+
+    wandb.init(project="bfl-test", name="torch_mnist")
 
 if cuda:
     print("using cuda.")
@@ -50,13 +54,13 @@ kwargs = {}
 data_folder_loc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
 train_dataset = datasets.MNIST(
-        os.path.join(data_folder_loc, "data", "data-%d" % bfl.rank()),
-        train=True,
-        download=True,
-        transform=transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-        ),
-    )
+    os.path.join(data_folder_loc, "data", "data-%d" % bfl.rank()),
+    train=True,
+    download=True,
+    transform=transforms.Compose(
+        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+    ),
+)
 train_sampler = torch.utils.data.distributed.DistributedSampler(
     train_dataset, num_replicas=bfl.size(), rank=bfl.rank()
 )
@@ -78,20 +82,21 @@ test_loader = torch.utils.data.DataLoader(
     test_dataset, batch_size=test_batch_size, sampler=test_sampler, **kwargs
 )
 
- 
+
 model = MLP()
 # model_hat = MLP()
 
 # Force hat and orignal model to be the samee and among all agents.
-# model_hat.load_state_dict(copy.deepcopy(model.state_dict()))  
+# model_hat.load_state_dict(copy.deepcopy(model.state_dict()))
 
 if cuda:
     model.cuda()
     # model_hat.cuda()
 
 # broadcast model
-bfl.broadcast_parameters(model.state_dict(), root_rank=0)
+bfl_util.broadcast_parameters(model.state_dict(), root_rank=0)
 # print("model parameters: ", model.state_dict())
+
 
 def train(epoch):
     model.train()
@@ -118,8 +123,7 @@ def train(epoch):
             100.0 * correct / total,
         )
     )
-    
-        
+
 
 def test():
     model.eval()
@@ -138,7 +142,10 @@ def test():
     )
     correct, total = 0, 0
 
+
 for e in range(epochs):
     train(e)
-print(f"rank {bfl.rank()} finished training, parameters: {list(model.parameters())[0].data[0][0]}")
+print(
+    f"rank {bfl.rank()} finished training, parameters: {list(model.parameters())[0].data[0][0]}"
+)
 test()

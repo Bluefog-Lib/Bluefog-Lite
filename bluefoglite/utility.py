@@ -1,4 +1,5 @@
-import bluefoglite.torch as bfl
+import bluefoglite.torch_api as bfl
+
 
 def broadcast_parameters(params, root_rank):
     """
@@ -22,12 +23,11 @@ def broadcast_parameters(params, root_rank):
         raise ValueError("invalid params of type: %s" % type(params))
 
     # Run asynchronous broadcasts.
-    # handles = []
+    handles = []
     for name, p in params:
-        bfl.broadcast_nonblocking(p, inplace=True, root_rank=root_rank).wait()
-        # handle = bfl.broadcast_nonblocking_(p, root_rank, name)
-        # handles.append(handle)
+        handle = bfl.broadcast_nonblocking(p, inplace=True, root_rank=root_rank)
+        handles.append(handle)
 
     # Wait for completion.
-    # for handle in handles:
-    #     bfl.synchronize(handle)
+    for handle in handles:
+        handle.wait()

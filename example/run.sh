@@ -1,1 +1,0 @@
-bflrun -np 4 python torch_mnist.py

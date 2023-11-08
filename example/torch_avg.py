@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
 import bluefoglite
-import bluefoglite.torch as bfl
+import bluefoglite.torch_api as bfl
 
 import argparse
 from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
@@ -23,24 +23,25 @@ parser.add_argument("--consensus-method", type=str, default="neighbor_allreduce"
 args = parser.parse_args()
 
 # choices: gloo, mpi, nccl
-bfl.init(backend='gloo')
+bfl.init(backend="gloo")
 bfl.set_topology(bluefoglite.RingGraph(bfl.size(), connect_style=0))
 
 device = bfl.rank() % torch.cuda.device_count()
 x = torch.randn(args.data_size, device=device, dtype=torch.double)
 x_bar = bfl.allreduce(x, op=ReduceOp.AVG)
-mse = [torch.norm(x-x_bar, p=2) / torch.norm(x_bar, p=2)]
+mse = [torch.norm(x - x_bar, p=2) / torch.norm(x_bar, p=2)]
 
 
 for ite in range(args.max_iters):
     x = eval(f"bfl.{args.consensus_method}(x, inplace=False)")
-    mse.append(torch.norm(x-x_bar, p=2) / torch.norm(x_bar, p=2))
+    mse.append(torch.norm(x - x_bar, p=2) / torch.norm(x_bar, p=2))
 
 
 mse = [m.item() for m in mse]
 print("MSE at last iteration: ", mse[-1])
 if args.plot_interactive and bfl.rank() == 0:
     import matplotlib.pyplot as plt
+
     plt.semilogy(mse)
     plt.savefig(f"./img/torch_avg_{args.consensus_method}.png")
     plt.show()

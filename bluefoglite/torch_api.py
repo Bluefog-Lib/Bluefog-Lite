@@ -178,4 +178,3 @@ def allreduce_nonblocking(
     if group is None:
         group = _global_group
     return group.allreduce_nonblocking(tensor=tensor, op=op, inplace=inplace)
-

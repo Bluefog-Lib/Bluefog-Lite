@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
 import bluefoglite
-import bluefoglite.torch as bfl
+import bluefoglite.torch_api as bfl
 
 bfl.init()
 bfl.set_topology(topology=bluefoglite.ExponentialGraph(bfl.size()))
