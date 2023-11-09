@@ -11,37 +11,24 @@ import torch.nn as nn
 import numpy as np
 import bluefoglite.torch_api as bfl
 import bluefoglite.utility as bfl_util
-from bluefoglite.common import topology_util
+from bluefoglite.common import topology
 from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
 
-
-# Training settings
-def MLP():
-    return nn.Sequential(
-        nn.Flatten(),
-        nn.Linear(784, 256),
-        nn.ReLU(),
-        nn.Linear(256, 10),
-    )
-
-
+# Args
 cuda = torch.cuda.is_available()
 seed = 42
 batch_size = 16
 test_batch_size = 16
-epochs = 10
+log_interval = 100
+epochs = 5
 lr = 0.001
 
+# Initialize topology
 bfl.init()
-topo = topology_util.RingGraph(bfl.size())
+topo = topology.RingGraph(bfl.size())
 bfl.set_topology(topo)
-# topo_gen = GetOptTopoSendRecvRanks(topo, bfl.rank())
 
-if bfl.rank() == 0:
-    import wandb
-
-    wandb.init(project="bfl-test", name="torch_mnist")
-
+# Device
 if cuda:
     print("using cuda.")
     device_id = bfl.rank() % torch.cuda.device_count()
@@ -50,6 +37,7 @@ if cuda:
 else:
     print("using cpu")
 
+# Dataloader
 kwargs = {}
 data_folder_loc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 
@@ -83,69 +71,89 @@ test_loader = torch.utils.data.DataLoader(
 )
 
 
+# Model
+def MLP():
+    return nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(784, 256),
+        nn.ReLU(),
+        nn.Linear(256, 10),
+    )
+
+
 model = MLP()
-# model_hat = MLP()
-
-# Force hat and orignal model to be the samee and among all agents.
-# model_hat.load_state_dict(copy.deepcopy(model.state_dict()))
-
 if cuda:
     model.cuda()
-    # model_hat.cuda()
 
-# broadcast model
+
+# Optimizer
+optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+
+# Broadcast parameters & optimizer state
 bfl_util.broadcast_parameters(model.state_dict(), root_rank=0)
-# print("model parameters: ", model.state_dict())
+
+
+def metric_average(val):
+    tensor = torch.tensor(val)
+    avg_tensor = bfl.allreduce(tensor)
+    return avg_tensor.item()
 
 
 def train(epoch):
     model.train()
-    correct, total = 0, 0
     for batch_idx, (data, target) in enumerate(train_loader):
-        model.zero_grad()
-        output = model(data.cuda())
-        loss = F.cross_entropy(output, target.cuda())
+        optimizer.zero_grad()
+        if cuda:
+            data, target = data.cuda(), target.cuda()
+        output = model(data)
+        loss = F.cross_entropy(output, target)
         loss.backward()
+        optimizer.step()
         with torch.no_grad():
-            for module in model.parameters():
-                module.data.add_(module.grad.data, alpha=-lr)
-                # print("before average: ", bfl.rank(), " ", list(model.parameters())[0].data[0][0])
+            # TODO[1]: Implement unit test to check whether params in different workers are the same
+            # TODO[2]: Write a function to sychronize the parameters in different workers
             for module in model.parameters():
                 bfl.allreduce(module.data, op=ReduceOp.AVG, inplace=True)
-                # print("after average: ", bfl.rank(), " ", list(model.parameters())[0].data[0][0])
-        correct += (output.argmax(dim=1) == target.cuda()).sum().item()
-        total += len(target)
-    print(
-        "rank {}: Train Epoch: {}\tLoss: {:.6f}\tAccuracy: {:.4f}%".format(
-            bfl.rank(),
-            epoch,
-            loss.item(),
-            100.0 * correct / total,
-        )
-    )
+        if batch_idx % log_interval == 0:
+            print(
+                "[{}] Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t".format(
+                    bfl.rank(),
+                    epoch,
+                    batch_idx * len(data),
+                    len(train_sampler),
+                    100.0 * batch_idx / len(train_loader),
+                    loss.item(),
+                )
+            )
 
 
-def test():
+def test(epoch):
     model.eval()
-    correct, total = 0, 0
-    for batch_idx, (data, target) in enumerate(test_loader):
-        output = model(data.cuda())
-        correct += (output.argmax(dim=1) == target.cuda()).sum().item()
+    test_loss, test_accuracy, total = 0.0, 0.0, 0.0
+    for data, target in test_loader:
+        if cuda:
+            data, target = data.cuda(), target.cuda()
+        output = model(data)
+        pred = output.data.max(1, keepdim=True)[1]
+        test_accuracy += pred.eq(target.data.view_as(pred)).cpu().float().sum().item()
+        test_loss += F.cross_entropy(output, target, reduction='sum').item()
         total += len(target)
-    # correct = bfl.allreduce(correct, op=ReduceOp.SUM)
-    # total = bfl.allreduce(total, op=ReduceOp.SUM)
-    print(
-        "rank {}: Total test\tAccuracy: {:.4f}%".format(
-            bfl.rank(),
-            100.0 * correct / total,
+    test_loss /= total
+    test_accuracy /= total
+    # Bluefog: average metric values across workers.
+    test_loss = metric_average(test_loss)
+    test_accuracy = metric_average(test_accuracy)
+    if bfl.rank() == 0:
+        print(
+            "\nTest Epoch: {}\tAverage loss: {:.6f}\tAccuracy: {:.4f}%\n".format(
+                epoch, test_loss, 100.0 * test_accuracy
+            ),
+            flush=True,
         )
-    )
-    correct, total = 0, 0
 
 
 for e in range(epochs):
     train(e)
-print(
-    f"rank {bfl.rank()} finished training, parameters: {list(model.parameters())[0].data[0][0]}"
-)
-test()
+    test(e)
+bfl.barrier()
+print(f"rank {bfl.rank()} finished.")

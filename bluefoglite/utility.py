@@ -23,11 +23,11 @@ def broadcast_parameters(params, root_rank):
         raise ValueError("invalid params of type: %s" % type(params))
 
     # Run asynchronous broadcasts.
-    handles = []
+    async_works = []
     for name, p in params:
-        handle = bfl.broadcast_nonblocking(p, inplace=True, root_rank=root_rank)
-        handles.append(handle)
+        async_work = bfl.broadcast_nonblocking(p, inplace=True, root_rank=root_rank)
+        async_works.append(async_work)
 
     # Wait for completion.
-    for handle in handles:
-        handle.wait()
+    for async_work in async_works:
+        async_work.wait()
