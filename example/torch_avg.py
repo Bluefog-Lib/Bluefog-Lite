@@ -7,7 +7,7 @@ import argparse
 from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
 
 parser = argparse.ArgumentParser(
-    description="PyTorch ImageNet Example",
+    description="Bluefog-Lite Average Example",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument("--data-size", type=int, default=4)
@@ -15,11 +15,6 @@ parser.add_argument("--max-iters", type=int, default=200)
 parser.add_argument("--plot-interactive", action="store_true")
 parser.add_argument("--backend", type=str, default="gloo")
 parser.add_argument("--consensus-method", type=str, default="neighbor_allreduce")
-# setattr(args, "data_size", 4)
-# setattr(args, "max_iters", 200)
-# setattr(args, "plot_interactive", True)
-# setattr(args, "backend", "gloo")
-# setattr(args, "consensus_method", "neighbor_allreduce")
 args = parser.parse_args()
 
 # choices: gloo, mpi, nccl
