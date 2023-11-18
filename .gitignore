@@ -148,3 +148,4 @@ output/*
 
 # script
 run.sh
+scripts/

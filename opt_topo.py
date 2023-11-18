@@ -40,7 +40,7 @@ def GetOptTopoSendRecvRanks(
             send_rank = (self_rank + n_ex) % n
             recv_rank = (self_rank - n_ex) % n
         yield [send_rank], [recv_rank], n_ex, dig
-        
+
         n_ex = 2 * n_ex + dig
         if n_ex >= (n - 1):
             n_ex = 0
@@ -51,7 +51,7 @@ def GetOptTopoSendRecvRanks1Port(
 ) -> Iterator[Tuple[List[int], List[int]]]:
     n = topo.number_of_nodes()
     assert n % 2 == 0
-    
+
     tau = int(math.ceil(math.log(n, 2.0)))
     bi = bin(n - 1)
     ite = 0
@@ -66,10 +66,9 @@ def GetOptTopoSendRecvRanks1Port(
         else:
             send_rank = (self_rank - 2 * n_ex - 1) % n
             recv_rank = (self_rank - 2 * n_ex - 1) % n
-            
-            
+
         yield [send_rank], [recv_rank], n_ex, dig
-        
+
         n_ex = 2 * n_ex + dig
         if n_ex >= (n - 1):
             n_ex = 0

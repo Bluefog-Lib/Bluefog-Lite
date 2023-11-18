@@ -45,6 +45,15 @@ def parse_args():
         type=int,
         help="Total number of training processes.",
     )
+    
+    parser.add_argument(
+        "--master-port",
+        action="store",
+        dest="master_port",
+        type=int,
+        default=29500,
+        help="Master port for BluefogLite."
+    )
 
     parser.add_argument(
         "command", nargs=argparse.REMAINDER, help="Command to be executed."
@@ -100,7 +109,7 @@ def main():
         env["BFL_FILE_STORE"] = shared_file_dir
         # TODO fix this
         env["MASTER_ADDR"] = "127.0.0.1"
-        env["MASTER_PORT"] = "29500"
+        env["MASTER_PORT"] = str(args.master_port)
 
         stdout = None
         stderr = subprocess.STDOUT
