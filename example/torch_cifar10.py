@@ -21,21 +21,15 @@ parser = argparse.ArgumentParser(
     description="Bluefog-Lite Example on MNIST",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument(
-    "--model", type=str, default="resnet18", help="model to use"
-)
+parser.add_argument("--model", type=str, default="resnet18", help="model to use")
 parser.add_argument(
     "--batch_size", type=int, default=16, help="input batch size for training"
 )
 parser.add_argument(
     "--test_batch_size", type=int, default=16, help="input batch size for testing"
 )
-parser.add_argument(
-    "--epochs", type=int, default=5, help="number of epochs to train"
-)
-parser.add_argument(
-    "--lr", type=float, default=0.01, help="learning rate"
-)
+parser.add_argument("--epochs", type=int, default=5, help="number of epochs to train")
+parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
 parser.add_argument(
     "--log_interval",
     type=int,

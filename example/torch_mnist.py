@@ -27,12 +27,8 @@ parser.add_argument(
 parser.add_argument(
     "--test_batch_size", type=int, default=16, help="input batch size for testing"
 )
-parser.add_argument(
-    "--epochs", type=int, default=5, help="number of epochs to train"
-)
-parser.add_argument(
-    "--lr", type=float, default=0.001, help="learning rate"
-)
+parser.add_argument("--epochs", type=int, default=5, help="number of epochs to train")
+parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
 parser.add_argument(
     "--log_interval",
     type=int,

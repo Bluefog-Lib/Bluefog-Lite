@@ -45,14 +45,14 @@ def parse_args():
         type=int,
         help="Total number of training processes.",
     )
-    
+
     parser.add_argument(
         "--master-port",
         action="store",
         dest="master_port",
         type=int,
         default=29500,
-        help="Master port for BluefogLite."
+        help="Master port for BluefogLite.",
     )
 
     parser.add_argument(
