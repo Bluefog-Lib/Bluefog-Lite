@@ -28,6 +28,21 @@ from bluefoglite.common import const
 from bluefoglite.common.topology import GetRecvWeights
 
 
+def gloo_device_wrapper(func):
+    @functools.wraps(func)
+    def wrapper(
+        *args, **kwargs
+    ):  # args: self; kwargs: tensor, self_weight, src_weights, dst_weights, inplace
+        if args[0]._backend == "gloo":
+            device = kwargs["tensor"].device
+            kwargs["tensor"] = kwargs["tensor"].cpu()
+            return func(*args, **kwargs).to(device)
+        else:
+            return func(*args, **kwargs)
+
+        return wrapper
+
+
 @dataclasses.dataclass
 class TopologyAndWeights:
     topology: nx.DiGraph
@@ -74,20 +89,6 @@ class BlueFogLiteGroup:
         self._size: Optional[int] = None
         self._topology_and_weights: Optional[TopologyAndWeights] = None
         self._process_group: Optional[dist.ProcessGroup] = None
-
-    def gloo_device_wrapper(func):
-        @functools.wraps(func)
-        def wrapper(
-            *args, **kwargs
-        ):  # args: self; kwargs: tensor, self_weight, src_weights, dst_weights, inplace
-            if args[0]._backend == "gloo":
-                device = kwargs["tensor"].device
-                kwargs["tensor"] = kwargs["tensor"].cpu()
-                return func(*args, **kwargs).to(device)
-            else:
-                return func(*args, **kwargs)
-
-        return wrapper
 
     @property
     def process_group(self):
