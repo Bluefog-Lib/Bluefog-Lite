@@ -129,7 +129,8 @@ data/
 **/checkpoint/
 experimental/
 
-# VSCode
+# VSCode and JetBrains
+.idea/
 .vscode/
 
 .DS_Store
@@ -140,3 +141,12 @@ examples/.profile/*
 # timeline log file
 .log/*
 .profile/
+
+# output
+img/*
+wandb/*
+output/*
+
+# script
+run.sh
+scripts/

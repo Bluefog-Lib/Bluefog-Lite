@@ -41,6 +41,7 @@ class EventStatus:
 
 DONE_EVENT = EventStatus(status=EventStatusEnum.DONE, err="")
 
+
 # This should be a singleton class
 class HandleManager:
     __instance: Optional["HandleManager"] = None

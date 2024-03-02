@@ -105,6 +105,7 @@ class BlueFogLiteGroup:
             )
         self._rank = int(_world_rank_env) if rank is None else rank
         self._size = int(_world_size_env) if size is None else size
+        self._backend = "undefined" if backend is None else backend
 
         dist.init_process_group(
             backend=backend,
@@ -209,17 +210,27 @@ class BlueFogLiteGroup:
                 "Must provide all self_weight, src_weights, and dst_weights "
                 "arguments or set static topology."
             )
-        tmp_recv_tensors = {i: torch.zeros_like(tensor) for i, _ in src_weights.items()}
+        comm_tensor = (
+            tensor.to("cpu")
+            if self._backend == "gloo" and tensor.device.type != "cpu"
+            else tensor
+        )
+        tmp_recv_tensors = {
+            i: torch.zeros_like(comm_tensor) for i, _ in src_weights.items()
+        }
         op_list = []
         for dst, weight in dst_weights.items():
             op_list.append(
                 dist.P2POp(
-                    dist.isend, tensor.mul(weight), peer=dst, group=self.process_group
+                    dist.isend,
+                    comm_tensor.mul(weight),
+                    peer=dst,
+                    group=self.process_group,
                 )
             )
-        for src, tmp_tensor in tmp_recv_tensors.items():
+        for src, comm_tensor in tmp_recv_tensors.items():
             op_list.append(
-                dist.P2POp(dist.irecv, tmp_tensor, peer=src, group=self.process_group)
+                dist.P2POp(dist.irecv, comm_tensor, peer=src, group=self.process_group)
             )
         reqs = dist.batch_isend_irecv(op_list)
 
@@ -229,12 +240,22 @@ class BlueFogLiteGroup:
             self_weight: float,
             src_weights: Dict[int, float],
         ) -> torch.Tensor:
-            tensor_ = tensor if inplace else tensor.detach().clone()
-            tensor_.mul_(self_weight)
-            for src, weight in src_weights.items():
-                tensor_.add_(tmp_recv_tensors[src].mul_(weight))
-            del tmp_recv_tensors
-            return tensor_
+            if self._backend == "gloo" and tensor.device.type != "cpu":
+                tensor_ = tensor.to("cpu")
+                tensor_.mul_(self_weight)
+                for src, weight in src_weights.items():
+                    tensor_.add_(tmp_recv_tensors[src].mul_(weight))
+                del tmp_recv_tensors
+                if inplace:
+                    tensor.copy_(tensor_)
+                return tensor_.to(tensor.device)
+            else:
+                tensor_ = tensor if inplace else tensor.detach().clone()
+                tensor_.mul_(self_weight)
+                for src, weight in src_weights.items():
+                    tensor_.add_(tmp_recv_tensors[src].mul_(weight))
+                del tmp_recv_tensors
+                return tensor_
 
         return AsyncWork(
             reqs,
@@ -297,7 +318,7 @@ class BlueFogLiteGroup:
         inplace: bool = True,
     ) -> AsyncWork:
         opts = dist.AllreduceOptions()
-        opts.reduceOp = op.value if op != ReduceOp.AVG else dist.ReduceOp.SUM
+        opts.reduceOp = op.value[0] if op != ReduceOp.AVG else dist.ReduceOp.SUM
         _tensor = tensor if inplace else tensor.detach().clone()
 
         def post_func(tensor: torch.Tensor, op: ReduceOp, size: int) -> torch.Tensor:
