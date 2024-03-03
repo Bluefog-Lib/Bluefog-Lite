@@ -20,6 +20,15 @@ import torch
 import torch.distributed as dist
 
 from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
+from bluefoglite.common.optimizers import (
+    DistributedAdaptWithCombineOptimizer,
+    CommunicationType,
+)
+from bluefoglite.utility import (
+    neighbor_allreduce_parameters,
+    broadcast_parameters,
+    broadcast_optimizer_state,
+)
 
 _global_group = BlueFogLiteGroup()
 
@@ -41,6 +50,8 @@ __all__ = [
     "allreduce_nonblocking",
     "allreduce",
 ]
+
+
 # import basic methods and wrap it with default global group.
 
 
@@ -96,6 +107,12 @@ def set_topology(topology: nx.DiGraph, *, group=None):
     if group is None:
         group = _global_group
     return group.set_topology(topology=topology)
+
+
+def load_topology(group=None):
+    if group is None:
+        group = _global_group
+    return group.load_topology(group=None)
 
 
 def neighbor_allreduce(

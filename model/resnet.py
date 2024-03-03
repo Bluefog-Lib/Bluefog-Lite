@@ -102,3 +102,13 @@ def ResNet44():
 def ResNet56():
     # 56 = (3 * 9 * 2) + 2: 9 blocks per layer
     return ResNet(BasicBlock, [9, 9, 9])
+
+
+if __name__ == "__main__":
+    model = ResNet20()
+    # print(model.state_dict())
+    for tensor in model.state_dict():
+        print(tensor)
+    print()
+    for p in model.named_parameters():
+        print(p[0])

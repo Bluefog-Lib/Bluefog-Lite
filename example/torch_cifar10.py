@@ -6,7 +6,6 @@ import torch.utils.data.distributed
 import torch.nn.functional as F
 
 import bluefoglite.torch_api as bfl
-import bluefoglite.utility as bfl_util
 from bluefoglite.common import topology
 from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
 from model import ResNet20, ResNet32, ResNet44, ResNet56
@@ -18,14 +17,21 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("--model", type=str, default="resnet20", help="model to use")
 parser.add_argument(
-    "--batch_size", type=int, default=16, help="input batch size for training"
+    "--batch-size", type=int, default=64, help="input batch size for training"
 )
 parser.add_argument(
-    "--test_batch_size", type=int, default=16, help="input batch size for testing"
+    "--test-batch-size", type=int, default=64, help="input batch size for testing"
 )
 parser.add_argument("--epochs", type=int, default=5, help="number of epochs to train")
 parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
 parser.add_argument("--momentum", type=float, default=0.9, help="momentum")
+parser.add_argument(
+    "--dist-optimizer",
+    type=str,
+    default="neighbor_allreduce",
+    help="The type of distributed optimizer. Supporting options are "
+    + "[neighbor_allreduce, allreduce]",
+)
 parser.add_argument(
     "--log_interval",
     type=int,
@@ -35,6 +41,7 @@ parser.add_argument(
 parser.add_argument(
     "--no_cuda", action="store_true", default=False, help="disables CUDA training"
 )
+
 parser.add_argument(
     "--seed", type=int, default=42, metavar="S", help="random seed (default: 42)"
 )
@@ -46,6 +53,9 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 bfl.init()
 topo = topology.RingGraph(bfl.size())
 bfl.set_topology(topo)
+dynamic_neighbor_allreduce_gen = topology.GetDynamicOnePeerSendRecvRanks(
+    bfl.load_topology(), bfl.rank()
+)
 
 # Device
 if args.cuda:
@@ -93,7 +103,6 @@ test_loader = torch.utils.data.DataLoader(
     test_dataset, batch_size=args.test_batch_size, sampler=test_sampler, **kwargs
 )
 
-
 # model
 if args.model == "resnet20":
     model = ResNet20()
@@ -113,10 +122,45 @@ optimizer = torch.optim.SGD(
     model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=5e-4
 )
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
-
+base_dist_optimizer = bfl.DistributedAdaptWithCombineOptimizer
+if args.dist_optimizer == "allreduce":
+    optimizer = base_dist_optimizer(
+        optimizer, model=model, communication_type=bfl.CommunicationType.allreduce
+    )
+elif args.dist_optimizer == "neighbor_allreduce":
+    optimizer = base_dist_optimizer(
+        optimizer,
+        model=model,
+        communication_type=bfl.CommunicationType.neighbor_allreduce,
+    )
+else:
+    raise ValueError(
+        "Unknown args.dist-optimizer type -- "
+        + args.dist_optimizer
+        + "\n"
+        + "Please set the argument to be one of "
+        + "[neighbor_allreduce, gradient_allreduce, allreduce, "
+        + "hierarchical_neighbor_allreduce, win_put, horovod]"
+    )
 
 # Broadcast parameters & optimizer state
-bfl_util.broadcast_parameters(model.state_dict(), root_rank=0)
+bfl.broadcast_parameters(model.state_dict(), root_rank=0)
+bfl.broadcast_optimizer_state(optimizer, root_rank=0)
+
+
+def dynamic_topology_update(epoch, batch_idx):
+    if args.dist_optimizer == "neighbor_allreduce":
+        send_neighbors, recv_neighbors = next(dynamic_neighbor_allreduce_gen)
+        assert len(send_neighbors) == len(recv_neighbors)
+        optimizer.dst_weights = {
+            r: 1 / (len(send_neighbors) + 1) for r in send_neighbors
+        }
+        optimizer.src_weights = {
+            r: 1 / (len(recv_neighbors) + 1) for r in recv_neighbors
+        }
+        optimizer.self_weight = 1 / (len(recv_neighbors) + 1)
+    else:
+        pass
 
 
 def metric_average(val):
@@ -129,18 +173,15 @@ def train(epoch):
     model.train()
     train_loss, correct, total = 0, 0, 0
     for batch_idx, (data, targets) in enumerate(train_loader):
+        dynamic_topology_update(epoch, batch_idx)
         if args.cuda:
             data, targets = data.cuda(), targets.cuda()
         optimizer.zero_grad()
         outputs = model(data)
         loss = F.cross_entropy(outputs, targets)
         loss.backward()
+        # TODO[1]: Implement unit test to check whether params in different workers are same after allreduce/neighbor_allreduce
         optimizer.step()
-
-        with torch.no_grad():
-            # TODO[1]: Implement unit test to check whether params in different workers are same after allreduce
-            # TODO[2]: Write a function to sychronize the parameters in different workers
-            bfl_util.neighbor_allreduce_parameters(model.state_dict())
         # Calculate metric
         train_loss += loss.item()
         _, pred = outputs.max(dim=1)
@@ -202,5 +243,6 @@ for e in range(args.epochs):
     train(e)
     test(e)
     scheduler.step()
+
 bfl.barrier()
 print(f"rank {bfl.rank()} finished.")

@@ -14,7 +14,7 @@
 # ==============================================================================
 
 import math
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Iterator, List
 
 import numpy as np
 import networkx as nx
@@ -185,3 +185,242 @@ def RingGraph(size: int, connect_style: int = 0) -> nx.DiGraph:
         topo[i] = np.roll(x, i)
     G = nx.from_numpy_array(topo, create_using=nx.DiGraph)
     return G
+
+
+def GetDynamicOnePeerSendRecvRanks(
+    topo: nx.DiGraph, self_rank: int
+) -> Iterator[Tuple[List[int], List[int]]]:
+    """A utility function to generate 1-outoging send rank and corresponding recieving rank(s).
+
+    Args:
+        topo (nx.DiGraph): The base topology to generate dynamic send and receive ranks.
+        self_rank (int): The self rank.
+
+    Yields:
+        Iterator[Tuple[List[int], List[int]]]: send_ranks, recv_ranks.
+    """
+    # Generate all outgoing ranks sorted by clock-wise. (Imagine all ranks put on a clock.)
+    size = topo.number_of_nodes()
+    sorted_send_ranks = []
+    for rank in range(size):
+        sorted_ranks = sorted(
+            topo.successors(rank),
+            key=lambda r, rk=rank: r - rk if r >= rk else r - rk + size,
+        )
+        if sorted_ranks[0] == rank:
+            sorted_ranks = sorted_ranks[1:]  # remove the self-loop
+        sorted_send_ranks.append(sorted_ranks)
+
+    self_degree = topo.out_degree(self_rank) - 1
+    index = 0
+    while True:
+        send_rank = sorted_send_ranks[self_rank][index % self_degree]
+        recv_ranks = []
+        for other_rank in range(size):
+            if other_rank == self_rank:
+                continue
+            degree = topo.out_degree(other_rank) - 1
+            if sorted_send_ranks[other_rank][index % degree] == self_rank:
+                recv_ranks.append(other_rank)
+
+        yield [send_rank], recv_ranks
+        index += 1
+
+
+def GetExp2DynamicSendRecvMachineRanks(
+    world_size: int, local_size: int, self_rank: int, local_rank: int
+) -> Iterator[Tuple[List[int], List[int]]]:
+    """
+    A utility function to generate 1-outgoing send machine id and corresponding recieving
+    machine id(s) for Exponentia-2 topology.
+
+    Args:
+        world_size (int): the size of all nodes; world_size = num_machines * nodes_per_machine
+        local_size (int): number of nodes in each machine
+        self_rank (int): The self rank.
+        local_rank (int): The self local rank.
+
+    Yields:
+        Iterator[Tuple[List[int], List[int]]]: send_machine_ids, recv_machine_ids.
+
+    Warning:
+        This function should be used under homogeneous enviroment only, i.e. all machines have
+        the same number of local processes.
+    """
+    assert (
+        self_rank % local_size
+    ) == local_rank, "It should be used under homogeneous environment only."
+    assert (
+        world_size % local_size
+    ) == 0, "It should be used under homogeneous environment only."
+    assert (
+        world_size > local_size
+    ), "It should be used under at least two machines case."
+
+    machine_id = self_rank // local_size
+    machine_size = world_size // local_size
+    exp_2_size = int(np.log2(machine_size - 1)) if machine_size > 1 else 0
+    index = 0
+    while True:
+        machine_dist = 2 ** (index % (exp_2_size + 1))
+        send_machine_rank = (machine_id + machine_dist) % machine_size
+        recv_machine_ranks = (machine_id - machine_dist) % machine_size
+        yield [send_machine_rank], [recv_machine_ranks]
+        index += 1
+
+
+def GetInnerOuterRingDynamicSendRecvRanks(
+    world_size: int, local_size: int, self_rank: int
+) -> Iterator[Tuple[List[int], List[int]]]:
+    """
+    A utility function to generate 1-outgoing send rank and corresponding recieving rank(s)
+    for Inner-Ring-Outer-Ring topology.
+
+    Args:
+        world_size (int): the size of all nodes; world_size = num_machines * nodes_per_machine
+        local_size (int): number of nodes in each machine
+        self_rank (int): The self rank.
+
+    Yields:
+        Iterator[Tuple[List[int], List[int]]]: send_ranks, recv_ranks.
+    """
+    num_machines = world_size // local_size
+    nodes_per_machine = local_size
+    assert (
+        world_size % local_size == 0
+    ), "It should be used under homogeneous environment only."
+    assert local_size > 2, (
+        "Do no support the case where nodes_per_machine is equal or "
+        "less than 2. Consider use hierarchical_neighbor_allreduce or GetDynamicOnePeerSendRecvRanks."
+    )
+
+    index = 0
+    while True:
+        machine_id = self_rank // nodes_per_machine
+        local_rank_id = self_rank % nodes_per_machine
+        local_rank_to_go_outside_id = index % nodes_per_machine
+
+        if local_rank_to_go_outside_id == local_rank_id:
+            # find send_rank
+            target_machine_id = (machine_id + 1) % num_machines
+            target_rank_id = target_machine_id * nodes_per_machine + local_rank_id
+            send_rank = target_rank_id
+
+            # find recv_rank
+            source_machine_id = (machine_id - 1) % num_machines
+            source_rank_id = source_machine_id * nodes_per_machine + local_rank_id
+            recv_rank = source_rank_id
+
+        else:
+            # find send_rank
+            target_local_rank_id = (local_rank_id + 1) % nodes_per_machine
+            if target_local_rank_id == local_rank_to_go_outside_id:
+                target_local_rank_id = (target_local_rank_id + 1) % nodes_per_machine
+            target_rank_id = target_local_rank_id + machine_id * nodes_per_machine
+            send_rank = target_rank_id
+
+            # find recv_rank
+            source_local_rank_id = (local_rank_id - 1) % nodes_per_machine
+            if source_local_rank_id == local_rank_to_go_outside_id:
+                source_local_rank_id = (source_local_rank_id - 1) % nodes_per_machine
+            source_rank_id = source_local_rank_id + machine_id * nodes_per_machine
+            recv_rank = source_rank_id
+
+        yield [send_rank], [recv_rank]
+        index += 1
+
+
+def GetInnerOuterExpo2DynamicSendRecvRanks(
+    world_size: int, local_size: int, self_rank: int
+) -> Iterator[Tuple[List[int], List[int]]]:
+    """
+    A utility function to generate 1-outgoing send rank and corresponding recieving rank(s)
+    for Inner-Exp2-Outer-Exp2 ring topology.
+
+    Args:
+        world_size (int): the size of all nodes; world_size = num_machines * nodes_per_machine
+        local_size (int): number of nodes in each machine
+        self_rank (int): The self rank.
+
+    Yields:
+        Iterator[Tuple[List[int], List[int]]]: send_ranks, recv_ranks.
+    """
+    num_machines = world_size // local_size
+    nodes_per_machine = local_size
+    assert (
+        world_size % local_size == 0
+    ), "It should be used under homogeneous environment only."
+    assert local_size > 2, (
+        "Do no support the case where nodes_per_machine is equal or "
+        "less than 2. Consider use hierarchical_neighbor_allreduce or GetDynamicOnePeerSendRecvRanks."
+    )
+
+    exp_2_out_size = int(np.log2(num_machines - 1))
+    if nodes_per_machine == 2:
+        exp_2_in_size = 0
+    else:
+        # -2 because we need to remove outgoing node
+        exp_2_in_size = int(np.log2(nodes_per_machine - 2))
+
+    index = 0
+    while True:
+        machine_id = self_rank // nodes_per_machine
+        local_rank_id = self_rank % nodes_per_machine
+        local_rank_to_go_outside_id = index % nodes_per_machine
+
+        if local_rank_to_go_outside_id == local_rank_id:
+            # Note: currently design is still not very good. Because some local rank i may NEVER
+            # directly talk to other machine's local rank i. Example:
+            #
+            # Assume num_machines=16, nodes_per_machine=4, and self_rank=1, then we know that
+            # exp_2_out_size=3, and local_rank_id=1. If this branch is reached,
+            # local_rank_to_go_outside_id=1, and index % (exp_2_out_size+1)=1, resulting in
+            # next_machine_dist always equal to 2.
+            next_machine_dist = 2 ** (index % (exp_2_out_size + 1))
+            # find send_rank
+            target_machine_id = (machine_id + next_machine_dist) % num_machines
+            target_rank_id = target_machine_id * nodes_per_machine + local_rank_id
+            send_rank = target_rank_id
+
+            # find recv_rank
+            source_machine_id = (machine_id - next_machine_dist) % num_machines
+            source_rank_id = source_machine_id * nodes_per_machine + local_rank_id
+            recv_rank = source_rank_id
+
+        else:
+            # Distance from self to out-rank:
+            dist_to_out = (
+                local_rank_to_go_outside_id - local_rank_id
+            ) % nodes_per_machine
+            next_inner_dist = 2 ** (index % (exp_2_in_size + 1))
+            if next_inner_dist >= dist_to_out:
+                next_inner_dist += 1
+
+            # find send_rank
+            target_local_rank_id = (local_rank_id + next_inner_dist) % nodes_per_machine
+            target_rank_id = target_local_rank_id + machine_id * nodes_per_machine
+            send_rank = target_rank_id
+
+            reverse_inner_dist = 2 ** (index % (exp_2_in_size + 1))
+            reverse_dist_to_out = (
+                local_rank_id - local_rank_to_go_outside_id
+            ) % nodes_per_machine
+            if reverse_inner_dist >= reverse_dist_to_out:
+                reverse_inner_dist += 1
+
+            # find recv_rank
+            source_local_rank_id = (
+                local_rank_id - reverse_inner_dist
+            ) % nodes_per_machine
+            source_rank_id = source_local_rank_id + machine_id * nodes_per_machine
+            recv_rank = source_rank_id
+
+        yield [send_rank], [recv_rank]
+        index += 1
+
+
+if __name__ == "__main__":
+    topo = ExponentialGraph(10)
+    gen = GetDynamicOnePeerSendRecvRanks(topo, 4)
+    for _ in range(10):
+        print(next(gen))

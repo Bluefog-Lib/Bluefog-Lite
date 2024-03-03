@@ -168,6 +168,9 @@ class BlueFogLiteGroup:
         )
         return True
 
+    def load_topology(self, group=None):
+        return self._topology_and_weights.topology
+
     def isend(self, tensor: torch.Tensor, dst: int, tag: int = 0) -> AsyncWork:
         self._check_rank(dst)
         return AsyncWork(work=self.process_group.send([tensor], dstRank=dst, tag=tag))
