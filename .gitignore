@@ -146,6 +146,7 @@ examples/.profile/*
 img/*
 wandb/*
 output/*
+output*
 
 # script
 run.sh

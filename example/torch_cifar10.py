@@ -1,5 +1,7 @@
 import argparse
 import os
+import cProfile
+import pstats
 
 from torchvision import datasets, transforms
 import torch.utils.data.distributed
@@ -7,8 +9,7 @@ import torch.nn.functional as F
 
 import bluefoglite.torch_api as bfl
 from bluefoglite.common import topology
-from bluefoglite.common.torch_backend import AsyncWork, BlueFogLiteGroup, ReduceOp
-from model import ResNet20, ResNet32, ResNet44, ResNet56
+from model import ResNet20, ResNet32, ResNet44, ResNet56, ViT
 
 # Args
 parser = argparse.ArgumentParser(
@@ -29,11 +30,13 @@ parser.add_argument(
     "--dist-optimizer",
     type=str,
     default="neighbor_allreduce",
-    help="The type of distributed optimizer. Supporting options are "
-    + "[neighbor_allreduce, allreduce]",
+    help="The type of distributed optimizer. Supporting options are [neighbor_allreduce, allreduce]",
+    choices=["neighbor_allreduce", "allreduce"]
 )
+parser.add_argument('--communicate-state-dict', action='store_true', default=False,
+                    help='If True, communicate state dictionary of model instead of named parameters')
 parser.add_argument(
-    "--log_interval",
+    "--log-interval",
     type=int,
     default=100,
     help="how many batches to wait before logging training status",
@@ -45,6 +48,12 @@ parser.add_argument(
 parser.add_argument(
     "--seed", type=int, default=42, metavar="S", help="random seed (default: 42)"
 )
+parser.add_argument(
+    '--profiling', type=str, default='no_profiling', metavar='S',
+    help='enable which profiling? default: no', choices=['no_profiling', 'c_profiling'])
+parser.add_argument(
+    '--disable-dynamic-topology', action='store_true',
+    default=False, help='Disable each iteration to transmit one neighbor per iteration dynamically.')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -53,9 +62,8 @@ args.cuda = not args.no_cuda and torch.cuda.is_available()
 bfl.init()
 topo = topology.RingGraph(bfl.size())
 bfl.set_topology(topo)
-dynamic_neighbor_allreduce_gen = topology.GetDynamicOnePeerSendRecvRanks(
-    bfl.load_topology(), bfl.rank()
-)
+if not args.disable_dynamic_topology:
+    dynamic_neighbor_allreduce_gen = topology.GetDynamicOnePeerSendRecvRanks(bfl.load_topology(), bfl.rank())
 
 # Device
 if args.cuda:
@@ -112,16 +120,17 @@ elif args.model == "resnet44":
     model = ResNet44()
 elif args.model == "resnet56":
     model = ResNet56()
+elif args.model == "vit_tiny":
+    model = ViT()
 else:
     raise NotImplementedError("model not implemented")
 if args.cuda:
     model.cuda()
 
-# Optimizer
+# Optimizer & Scheduler
 optimizer = torch.optim.SGD(
     model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=5e-4
 )
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 base_dist_optimizer = bfl.DistributedAdaptWithCombineOptimizer
 if args.dist_optimizer == "allreduce":
     optimizer = base_dist_optimizer(
@@ -142,6 +151,7 @@ else:
         + "[neighbor_allreduce, gradient_allreduce, allreduce, "
         + "hierarchical_neighbor_allreduce, win_put, horovod]"
     )
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
 
 # Broadcast parameters & optimizer state
 bfl.broadcast_parameters(model.state_dict(), root_rank=0)
@@ -173,7 +183,8 @@ def train(epoch):
     model.train()
     train_loss, correct, total = 0, 0, 0
     for batch_idx, (data, targets) in enumerate(train_loader):
-        dynamic_topology_update(epoch, batch_idx)
+        if not args.disable_dynamic_topology:
+            dynamic_topology_update(epoch, batch_idx)
         if args.cuda:
             data, targets = data.cuda(), targets.cuda()
         optimizer.zero_grad()
@@ -181,7 +192,9 @@ def train(epoch):
         loss = F.cross_entropy(outputs, targets)
         loss.backward()
         # TODO[1]: Implement unit test to check whether params in different workers are same after allreduce/neighbor_allreduce
+        # print(batch_idx)
         optimizer.step()
+        # print(batch_idx)
         # Calculate metric
         train_loss += loss.item()
         _, pred = outputs.max(dim=1)
@@ -239,10 +252,23 @@ def test(epoch):
         )
 
 
-for e in range(args.epochs):
-    train(e)
-    test(e)
-    scheduler.step()
+if args.profiling == "c_profiling":
+    if bfl.rank() == 0:
+        profiler = cProfile.Profile()
+        profiler.enable()
+        train(0)
+        profiler.disable()
+        # redirect to ./output.txt
+        with open("output_" + ("static" if args.disable_dynamic_topology else "dynamic") + ".txt", "w") as file:
+            stats = pstats.Stats(profiler, stream=file).sort_stats('cumtime')
+            stats.print_stats()
+    else:
+        train(0)
+else:
+    for e in range(args.epochs):
+        train(e)
+        test(e)
+        scheduler.step()
 
 bfl.barrier()
 print(f"rank {bfl.rank()} finished.")

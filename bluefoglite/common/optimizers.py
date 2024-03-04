@@ -136,10 +136,7 @@ class _DistributedReduceOptimizer(torch.optim.Optimizer):
                 for name, p in layer.named_parameters():
                     if not layer.training:
                         continue
-                    if (
-                        self._name_parameters.get(parent_name + "." + name, None)
-                        is None
-                    ):
+                    if self._name_parameters.get(parent_name + "." + name, None) is None:
                         # Some case like encoder-decode, which shared the same weights.
                         continue
                     if p.requires_grad:
@@ -153,10 +150,7 @@ class _DistributedReduceOptimizer(torch.optim.Optimizer):
                         if self._reduce_delay[p] == 0:
                             if self._communication_type == CommunicationType.allreduce:
                                 async_work = self._allreduce_data_async(p)
-                            elif (
-                                self._communication_type
-                                == CommunicationType.neighbor_allreduce
-                            ):
+                            elif self._communication_type == CommunicationType.neighbor_allreduce:
                                 async_work = self._neighbor_allreduce_data_async(p)
                             elif self._communication_type == CommunicationType.empty:
                                 async_work = None
@@ -196,7 +190,8 @@ class _DistributedReduceOptimizer(torch.optim.Optimizer):
                 if async_work is not None:
                     output = async_work.wait()
                     p.set_(output)
-                self._async_works[p] = self._num_steps_per_communication
+                # self._async_works[p] = self._num_steps_per_communication
+                self._reduce_delay[p] = self._num_steps_per_communication
         self._async_works.clear()
         self._synchronized = True
 

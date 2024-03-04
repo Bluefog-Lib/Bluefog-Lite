@@ -107,8 +107,11 @@ def ResNet56():
 if __name__ == "__main__":
     model = ResNet20()
     # print(model.state_dict())
-    for tensor in model.state_dict():
-        print(tensor)
+    for name in model.state_dict():
+        print(name)
     print()
     for p in model.named_parameters():
         print(p[0])
+    print(len(model.state_dict()))
+    print(len(list(model.parameters())))
+    print(len(list(model.named_parameters())))
