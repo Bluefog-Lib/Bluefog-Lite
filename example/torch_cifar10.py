@@ -1,7 +1,5 @@
 import argparse
 import os
-import cProfile
-import pstats
 
 from torchvision import datasets, transforms
 import torch.utils.data.distributed
@@ -58,7 +56,7 @@ parser.add_argument(
     default="no_profiling",
     metavar="S",
     help="enable which profiling? default: no",
-    choices=["no_profiling", "c_profiling"],
+    choices=["no_profiling", "c_profiling", "torch_profiling"],
 )
 parser.add_argument(
     "--disable-dynamic-topology",
@@ -266,19 +264,38 @@ def test(epoch):
 
 if args.profiling == "c_profiling":
     if bfl.rank() == 0:
+        import cProfile
+        import pstats
+
         profiler = cProfile.Profile()
         profiler.enable()
         train(0)
         profiler.disable()
-        # redirect to ./output.txt
+        # redirect to ./output_static.txt or ./output_dynamic.txt
         with open(
-            "output_"
-            + ("static" if args.disable_dynamic_topology else "dynamic")
-            + ".txt",
+            f"output_{'static' if args.disable_dynamic_topology else 'dynamic'}.txt",
             "w",
         ) as file:
             stats = pstats.Stats(profiler, stream=file).sort_stats("tottime")
             stats.print_stats()
+    else:
+        train(0)
+elif args.profiling == "torch_profiling":
+    from torch.profiler import profile, ProfilerActivity
+    import contextlib
+
+    if bfl.rank() == 0:
+        with profile(
+            activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
+        ) as prof:
+            train(0)
+        # redirect to ./output_static.txt or ./output_dynamic.txt
+        with open(
+            f"output_{'static' if args.disable_dynamic_topology else 'dynamic'}.txt",
+            "w",
+        ) as file:
+            with contextlib.redirect_stdout(file):
+                print(prof.key_averages().table(sort_by="cpu_time_total"))
     else:
         train(0)
 else:

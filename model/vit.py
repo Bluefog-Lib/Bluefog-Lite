@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchsummary
+from torch.profiler import profile, record_function, ProfilerActivity
 
 
 class ViT(nn.Module):
@@ -135,10 +135,11 @@ if __name__ == "__main__":
         is_cls_token=False,
     ).cuda()
     print(net)
-    torchsummary.summary(net, (c, h, w))
+    # torchsummary.summary(net, (c, h, w))
     # inference
     with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
-        with record_function("model_inference"):
-            x = torch.randn(b, c, h, w).cuda()
-            out = net(x)
-            out.mean().backward()
+        # with record_function("model_inference"):
+        x = torch.randn(b, c, h, w).cuda()
+        out = net(x)
+        out.mean().backward()
+    print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=20))
