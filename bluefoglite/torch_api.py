@@ -197,5 +197,5 @@ def allreduce_nonblocking(
     return group.allreduce_nonblocking(tensor=tensor, op=op, inplace=inplace)
 
 
-def barrier():
-    allreduce(torch.Tensor([1.0]))
+def barrier(device: str) -> None:
+    allreduce(torch.tensor([1.0], device=device))

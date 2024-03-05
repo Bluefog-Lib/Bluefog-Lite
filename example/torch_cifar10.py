@@ -51,6 +51,12 @@ parser.add_argument(
     "--seed", type=int, default=42, metavar="S", help="random seed (default: 42)"
 )
 parser.add_argument(
+    "--backend",
+    type=str,
+    default="gloo",
+    choices=["gloo", "nccl"],
+)
+parser.add_argument(
     "--profiling",
     type=str,
     default="no_profiling",
@@ -69,7 +75,7 @@ args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 # Initialize topology
-bfl.init()
+bfl.init(backend=args.backend)
 topo = topology.RingGraph(bfl.size())
 bfl.set_topology(topo)
 if not args.disable_dynamic_topology:
@@ -83,9 +89,11 @@ if args.cuda:
     device_id = bfl.rank() % torch.cuda.device_count()
     torch.cuda.set_device(device_id)
     torch.cuda.manual_seed(args.seed)
+    device = torch.tensor([0.0]).cuda().device
 else:
     print("using cpu")
     torch.manual_seed(args.seed)
+    device = "cpu"
 
 # Dataloader
 kwargs = {}
@@ -108,19 +116,25 @@ train_dataset = datasets.CIFAR10(
     root="./data", train=True, download=True, transform=transform_train
 )
 train_sampler = torch.utils.data.distributed.DistributedSampler(
-    train_dataset, num_replicas=bfl.size(), rank=bfl.rank()
+    train_dataset, num_replicas=bfl.size(), rank=bfl.rank(), seed=args.seed
 )
 train_loader = torch.utils.data.DataLoader(
-    train_dataset, batch_size=args.batch_size, sampler=train_sampler, **kwargs
+    train_dataset,
+    batch_size=args.batch_size,
+    sampler=train_sampler,
+    **kwargs,
 )
 test_dataset = datasets.CIFAR10(
     root="./data", train=False, download=True, transform=transform_test
 )
 test_sampler = torch.utils.data.distributed.DistributedSampler(
-    test_dataset, num_replicas=bfl.size(), rank=bfl.rank()
+    test_dataset, num_replicas=bfl.size(), rank=bfl.rank(), seed=args.seed
 )
 test_loader = torch.utils.data.DataLoader(
-    test_dataset, batch_size=args.test_batch_size, sampler=test_sampler, **kwargs
+    test_dataset,
+    batch_size=args.test_batch_size,
+    sampler=test_sampler,
+    **kwargs,
 )
 
 # model
@@ -167,7 +181,9 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epo
 
 # Broadcast parameters & optimizer state
 bfl.broadcast_parameters(model.state_dict(), root_rank=0)
-bfl.broadcast_optimizer_state(optimizer, root_rank=0)
+bfl.broadcast_optimizer_state(
+    optimizer, root_rank=0, device=next(model.parameters()).device
+)
 
 
 def dynamic_topology_update(epoch, batch_idx):
@@ -186,7 +202,7 @@ def dynamic_topology_update(epoch, batch_idx):
 
 
 def metric_average(val):
-    tensor = torch.tensor(val)
+    tensor = torch.tensor(val, device=device)
     avg_tensor = bfl.allreduce(tensor)
     return avg_tensor.item()
 
@@ -284,6 +300,8 @@ elif args.profiling == "torch_profiling":
     from torch.profiler import profile, ProfilerActivity
     import contextlib
 
+    assert args.backend != "nccl", "NCCL backend does not support torch_profiling."
+
     if bfl.rank() == 0:
         with profile(
             activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU], record_shapes=True
@@ -304,5 +322,5 @@ else:
         test(e)
         scheduler.step()
 
-bfl.barrier()
+bfl.barrier(device=device)
 print(f"rank {bfl.rank()} finished.")

@@ -18,7 +18,7 @@ from collections.abc import Iterable
 import functools
 from enum import Enum
 import os
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Dict, List, Tuple, Optional, Union, Callable
 
 import networkx as nx
 import torch
@@ -218,7 +218,6 @@ class BlueFogLiteGroup:
             if self._backend == "gloo" and tensor.device.type != "cpu"
             else tensor
         )
-
         op_list = []
         for dst, weight in dst_weights.items():
             op_list.append(
@@ -231,7 +230,7 @@ class BlueFogLiteGroup:
             )
         src_weights_items = list(src_weights.items())
         tmp_recv_tensors_concat = torch.zeros(
-            len(src_weights_items), *comm_tensor.shape
+            len(src_weights_items), *comm_tensor.shape, device=comm_tensor.device
         )
         for idx, (src, _) in enumerate(src_weights_items):
             op_list.append(
@@ -249,7 +248,7 @@ class BlueFogLiteGroup:
             tensor: torch.Tensor,
             tmp_recv_tensors_concat: torch.Tensor,
             self_weight: float,
-            src_weights_items: List[tuple[int, float]],
+            src_weights_items: List[Tuple[int, float]],
         ) -> torch.Tensor:
             if self._backend == "gloo" and tensor.device.type != "cpu":
                 tensor_ = tensor.to("cpu")

@@ -57,7 +57,7 @@ def neighbor_allreduce_parameters(params):
         async_work.wait()
 
 
-def broadcast_optimizer_state(optimizer, root_rank):
+def broadcast_optimizer_state(optimizer, root_rank, device):
     if isinstance(optimizer, torch.optim.LBFGS):
         raise ValueError("cannot broadcast torch.optim.LBFGS state")
 
@@ -113,14 +113,19 @@ def broadcast_optimizer_state(optimizer, root_rank):
     # new unwrapped scalar value via a callback.
     def _create_callback(pid, name, t, p):
         def _from_tensor():
-            state_dict["state"][pid][name] = t(p.numpy()[0])
+            state_dict["state"][pid][name] = (
+                t(p.cpu().numpy()[0]) if device != "cpu" else t(p.numpy()[0])
+            )
 
         return _from_tensor
 
     def _create_option_callback(index, option_key, option_tensor, dtypes):
         def _from_tensor():
             optimizer.param_groups[index][option_key] = _recursive_cast(
-                option_tensor.numpy()[0], dtypes
+                option_tensor.cpu().numpy()[0]
+                if device != "cpu"
+                else option_tensor.numpy()[0],
+                dtypes,
             )
 
         return _from_tensor
@@ -139,7 +144,7 @@ def broadcast_optimizer_state(optimizer, root_rank):
             # Options like the learning rate are scalar, and need to be wrapped in tensors
             key = "%s.%d" % (option_key, index)
             dtypes = _get_types(option_value)
-            option_tensor = torch.Tensor([option_value])
+            option_tensor = torch.tensor([option_value], device=device)
             callbacks[key] = _create_option_callback(
                 index, option_key, option_tensor, dtypes
             )
@@ -162,7 +167,7 @@ def broadcast_optimizer_state(optimizer, root_rank):
                     # Wrap the scalar in a FloatTensor, and remember its type
                     # so we can cast it back after unwrapping
                     t = type(p)
-                    p = torch.Tensor([p])
+                    p = torch.tensor([p], device=device)
                     callbacks[key] = _create_callback(pid, name, t, p)
 
                 params.append((key, p))
