@@ -31,10 +31,14 @@ parser.add_argument(
     type=str,
     default="neighbor_allreduce",
     help="The type of distributed optimizer. Supporting options are [neighbor_allreduce, allreduce]",
-    choices=["neighbor_allreduce", "allreduce"]
+    choices=["neighbor_allreduce", "allreduce"],
 )
-parser.add_argument('--communicate-state-dict', action='store_true', default=False,
-                    help='If True, communicate state dictionary of model instead of named parameters')
+parser.add_argument(
+    "--communicate-state-dict",
+    action="store_true",
+    default=False,
+    help="If True, communicate state dictionary of model instead of named parameters",
+)
 parser.add_argument(
     "--log-interval",
     type=int,
@@ -49,11 +53,19 @@ parser.add_argument(
     "--seed", type=int, default=42, metavar="S", help="random seed (default: 42)"
 )
 parser.add_argument(
-    '--profiling', type=str, default='no_profiling', metavar='S',
-    help='enable which profiling? default: no', choices=['no_profiling', 'c_profiling'])
+    "--profiling",
+    type=str,
+    default="no_profiling",
+    metavar="S",
+    help="enable which profiling? default: no",
+    choices=["no_profiling", "c_profiling"],
+)
 parser.add_argument(
-    '--disable-dynamic-topology', action='store_true',
-    default=False, help='Disable each iteration to transmit one neighbor per iteration dynamically.')
+    "--disable-dynamic-topology",
+    action="store_true",
+    default=False,
+    help="Disable each iteration to transmit one neighbor per iteration dynamically.",
+)
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -63,7 +75,9 @@ bfl.init()
 topo = topology.RingGraph(bfl.size())
 bfl.set_topology(topo)
 if not args.disable_dynamic_topology:
-    dynamic_neighbor_allreduce_gen = topology.GetDynamicOnePeerSendRecvRanks(bfl.load_topology(), bfl.rank())
+    dynamic_neighbor_allreduce_gen = topology.GetDynamicOnePeerSendRecvRanks(
+        bfl.load_topology(), bfl.rank()
+    )
 
 # Device
 if args.cuda:
@@ -192,9 +206,7 @@ def train(epoch):
         loss = F.cross_entropy(outputs, targets)
         loss.backward()
         # TODO[1]: Implement unit test to check whether params in different workers are same after allreduce/neighbor_allreduce
-        # print(batch_idx)
         optimizer.step()
-        # print(batch_idx)
         # Calculate metric
         train_loss += loss.item()
         _, pred = outputs.max(dim=1)
@@ -259,8 +271,13 @@ if args.profiling == "c_profiling":
         train(0)
         profiler.disable()
         # redirect to ./output.txt
-        with open("output_" + ("static" if args.disable_dynamic_topology else "dynamic") + ".txt", "w") as file:
-            stats = pstats.Stats(profiler, stream=file).sort_stats('cumtime')
+        with open(
+            "output_"
+            + ("static" if args.disable_dynamic_topology else "dynamic")
+            + ".txt",
+            "w",
+        ) as file:
+            stats = pstats.Stats(profiler, stream=file).sort_stats("tottime")
             stats.print_stats()
     else:
         train(0)

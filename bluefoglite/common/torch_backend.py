@@ -218,9 +218,7 @@ class BlueFogLiteGroup:
             if self._backend == "gloo" and tensor.device.type != "cpu"
             else tensor
         )
-        tmp_recv_tensors = {
-            i: torch.zeros_like(comm_tensor) for i, _ in src_weights.items()
-        }
+
         op_list = []
         for dst, weight in dst_weights.items():
             op_list.append(
@@ -231,33 +229,43 @@ class BlueFogLiteGroup:
                     group=self.process_group,
                 )
             )
-        for src, comm_tensor in tmp_recv_tensors.items():
+        src_weights_items = list(src_weights.items())
+        tmp_recv_tensors_concat = torch.zeros(
+            len(src_weights_items), *comm_tensor.shape
+        )
+        for idx, (src, _) in enumerate(src_weights_items):
             op_list.append(
-                dist.P2POp(dist.irecv, comm_tensor, peer=src, group=self.process_group)
+                dist.P2POp(
+                    dist.irecv,
+                    tmp_recv_tensors_concat[idx],
+                    peer=src,
+                    group=self.process_group,
+                )
             )
+
         reqs = dist.batch_isend_irecv(op_list)
 
         def post_func(
             tensor: torch.Tensor,
-            tmp_recv_tensors: Dict[int, torch.Tensor],
+            tmp_recv_tensors_concat: torch.Tensor,
             self_weight: float,
-            src_weights: Dict[int, float],
+            src_weights_items: List[tuple[int, float]],
         ) -> torch.Tensor:
             if self._backend == "gloo" and tensor.device.type != "cpu":
                 tensor_ = tensor.to("cpu")
                 tensor_.mul_(self_weight)
-                for src, weight in src_weights.items():
-                    tensor_.add_(tmp_recv_tensors[src].mul_(weight))
-                del tmp_recv_tensors
+                for idx, (_, weight) in enumerate(src_weights_items):
+                    tensor_.add_(tmp_recv_tensors_concat[idx], alpha=weight)
+                del tmp_recv_tensors_concat
                 if inplace:
                     tensor.copy_(tensor_)
                 return tensor_.to(tensor.device)
             else:
                 tensor_ = tensor if inplace else tensor.detach().clone()
                 tensor_.mul_(self_weight)
-                for src, weight in src_weights.items():
-                    tensor_.add_(tmp_recv_tensors[src].mul_(weight))
-                del tmp_recv_tensors
+                for idx, (_, weight) in enumerate(src_weights_items):
+                    tensor_.add_(tmp_recv_tensors_concat[idx], alpha=weight)
+                del tmp_recv_tensors_concat
                 return tensor_
 
         return AsyncWork(
@@ -265,9 +273,9 @@ class BlueFogLiteGroup:
             functools.partial(
                 post_func,
                 tensor=tensor,
-                tmp_recv_tensors=tmp_recv_tensors,
+                tmp_recv_tensors_concat=tmp_recv_tensors_concat,
                 self_weight=self_weight,
-                src_weights=src_weights,
+                src_weights_items=src_weights_items,
             ),
         )
 

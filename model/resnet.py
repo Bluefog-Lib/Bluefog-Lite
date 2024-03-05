@@ -106,7 +106,6 @@ def ResNet56():
 
 if __name__ == "__main__":
     model = ResNet20()
-    # print(model.state_dict())
     for name in model.state_dict():
         print(name)
     print()

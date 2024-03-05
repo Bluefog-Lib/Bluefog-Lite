@@ -6,24 +6,24 @@ import torchsummary
 
 class ViT(nn.Module):
     def __init__(
-            self,
-            in_channels: int = 3,
-            num_classes: int = 10,
-            img_size: int = 32,
-            patch: int = 8,
-            dropout: float = 0.0,
-            num_layers: int = 7,
-            hidden: int = 384,
-            mlp_hidden: int = 384,
-            head: int = 8,
-            is_cls_token: bool = True,
+        self,
+        in_channels: int = 3,
+        num_classes: int = 10,
+        img_size: int = 32,
+        patch: int = 8,
+        dropout: float = 0.0,
+        num_layers: int = 7,
+        hidden: int = 384,
+        mlp_hidden: int = 384,
+        head: int = 8,
+        is_cls_token: bool = True,
     ):
         super(ViT, self).__init__()
         self.patch = patch
         self.is_cls_token = is_cls_token
         self.patch_size = img_size // self.patch
         f = (img_size // self.patch) ** 2 * 3  # 48 # patch vec length
-        num_tokens = (self.patch ** 2) + 1 if self.is_cls_token else (self.patch ** 2)
+        num_tokens = (self.patch**2) + 1 if self.is_cls_token else (self.patch**2)
 
         self.emb = nn.Linear(f, hidden)  # (b, n, f)
         self.cls_token = (
@@ -64,13 +64,13 @@ class ViT(nn.Module):
             .unfold(3, self.patch_size, self.patch_size)
             .permute(0, 2, 3, 4, 5, 1)
         )
-        out = out.reshape(x.size(0), self.patch ** 2, -1)
+        out = out.reshape(x.size(0), self.patch**2, -1)
         return out
 
 
 class TransformerEncoder(nn.Module):
     def __init__(
-            self, feats: int, mlp_hidden: int, head: int = 8, dropout: float = 0.0
+        self, feats: int, mlp_hidden: int, head: int = 8, dropout: float = 0.0
     ):
         super(TransformerEncoder, self).__init__()
         self.la1 = nn.LayerNorm(feats)
@@ -96,7 +96,7 @@ class MultiHeadSelfAttention(nn.Module):
         super(MultiHeadSelfAttention, self).__init__()
         self.head = head
         self.feats = feats
-        self.sqrt_d = self.feats ** 0.5
+        self.sqrt_d = self.feats**0.5
 
         self.q = nn.Linear(feats, feats)
         self.k = nn.Linear(feats, feats)
@@ -137,7 +137,8 @@ if __name__ == "__main__":
     print(net)
     torchsummary.summary(net, (c, h, w))
     # inference
-    x = torch.randn(b, c, h, w).cuda()
-    out = net(x)
-    out.mean().backward()
-    print(out.shape)
+    with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
+        with record_function("model_inference"):
+            x = torch.randn(b, c, h, w).cuda()
+            out = net(x)
+            out.mean().backward()
