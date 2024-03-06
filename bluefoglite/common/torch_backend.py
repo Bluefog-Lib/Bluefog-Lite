@@ -213,24 +213,31 @@ class BlueFogLiteGroup:
                 "Must provide all self_weight, src_weights, and dst_weights "
                 "arguments or set static topology."
             )
-        comm_tensor = (
-            tensor.to("cpu")
-            if self._backend == "gloo" and tensor.device.type != "cpu"
-            else tensor
-        )
+
         op_list = []
         for dst, weight in dst_weights.items():
+            comm_tensor = (
+                tensor.mul(weight).to("cpu")
+                if self._backend == "gloo" and tensor.device.type != "cpu"
+                else tensor.mul(weight)
+            )
             op_list.append(
                 dist.P2POp(
                     dist.isend,
-                    comm_tensor.mul(weight),
+                    comm_tensor,
                     peer=dst,
                     group=self.process_group,
                 )
             )
         src_weights_items = list(src_weights.items())
         tmp_recv_tensors_concat = torch.zeros(
-            len(src_weights_items), *comm_tensor.shape, device=comm_tensor.device
+            len(src_weights_items),
+            *tensor.shape,
+            device=(
+                "cpu"
+                if self._backend == "gloo" and tensor.device.type != "cpu"
+                else tensor.device
+            ),
         )
         for idx, (src, _) in enumerate(src_weights_items):
             op_list.append(
