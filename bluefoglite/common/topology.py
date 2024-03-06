@@ -417,10 +417,3 @@ def GetInnerOuterExpo2DynamicSendRecvRanks(
 
         yield [send_rank], [recv_rank]
         index += 1
-
-
-if __name__ == "__main__":
-    topo = ExponentialGraph(10)
-    gen = GetDynamicOnePeerSendRecvRanks(topo, 4)
-    for _ in range(10):
-        print(next(gen))

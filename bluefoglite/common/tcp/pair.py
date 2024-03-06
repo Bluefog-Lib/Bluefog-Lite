@@ -47,7 +47,6 @@ ENCODED_HEADER_LENGTH_WITH_DETAILS = 32
 # AF_NETLINK, AF_TIPC) or strings (AF_UNIX).
 TAddress = Union[Tuple[Any, ...], str]
 
-
 # Socket related constant nomenclature follows:
 # AddressFamily startswith 'AF_'
 # SocketKind startswith 'SOCK_'
