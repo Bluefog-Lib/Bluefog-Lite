@@ -197,5 +197,6 @@ def allreduce_nonblocking(
     return group.allreduce_nonblocking(tensor=tensor, op=op, inplace=inplace)
 
 
-def barrier(device: str) -> None:
+def barrier(device: str = "cpu") -> None:
+    # If backend is nccl, device="cuda" or f"cuda:{i}" should be passed in.
     allreduce(torch.tensor([1.0], device=device))

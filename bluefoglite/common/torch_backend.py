@@ -250,22 +250,15 @@ class BlueFogLiteGroup:
             self_weight: float,
             src_weights_items: List[Tuple[int, float]],
         ) -> torch.Tensor:
+            tensor_ = tensor if inplace else tensor.detach().clone()
+            tensor_.mul_(self_weight)
+            # move tmp_recv_tensors_concat from cpu to cuda.
             if self._backend == "gloo" and tensor.device.type != "cpu":
-                tensor_ = tensor.to("cpu")
-                tensor_.mul_(self_weight)
-                for idx, (_, weight) in enumerate(src_weights_items):
-                    tensor_.add_(tmp_recv_tensors_concat[idx], alpha=weight)
-                del tmp_recv_tensors_concat
-                if inplace:
-                    tensor.copy_(tensor_)
-                return tensor_.to(tensor.device)
-            else:
-                tensor_ = tensor if inplace else tensor.detach().clone()
-                tensor_.mul_(self_weight)
-                for idx, (_, weight) in enumerate(src_weights_items):
-                    tensor_.add_(tmp_recv_tensors_concat[idx], alpha=weight)
-                del tmp_recv_tensors_concat
-                return tensor_
+                tmp_recv_tensors_concat = tmp_recv_tensors_concat.to(tensor_.device)
+            for idx, (_, weight) in enumerate(src_weights_items):
+                tensor_.add_(tmp_recv_tensors_concat[idx], alpha=weight)
+            del tmp_recv_tensors_concat
+            return tensor_
 
         return AsyncWork(
             reqs,
