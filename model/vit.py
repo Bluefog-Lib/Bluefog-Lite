@@ -1,3 +1,4 @@
+# Reference repository https://github.com/omihub777/ViT-CIFAR
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -135,7 +136,6 @@ if __name__ == "__main__":
         is_cls_token=False,
     ).cuda()
     print(net)
-    # torchsummary.summary(net, (c, h, w))
     # inference
     with profile(activities=[ProfilerActivity.CPU], record_shapes=True) as prof:
         # with record_function("model_inference"):

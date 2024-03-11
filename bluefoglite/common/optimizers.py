@@ -39,16 +39,6 @@ def _named_leaf_module(module, parent_name=None):
         yield from _named_leaf_module(ch_module, full_name)
 
 
-def _find_duplicates(lst):
-    seen = set()
-    dups = set()
-    for el in lst:
-        if el in seen:
-            dups.add(el)
-        seen.add(el)
-    return dups
-
-
 def _check_named_parameters(optimizer, model):
     _models = None
     if isinstance(model, torch.nn.Module):
@@ -68,7 +58,7 @@ def _check_named_parameters(optimizer, model):
             "model.named_parameters()."
         )
 
-    dups = _find_duplicates([k for k, _ in named_parameters])
+    dups = list(set([k for k, _ in named_parameters]))
     if dups:
         raise ValueError(
             "Parameter names in named_parameters must be unique. "
@@ -93,6 +83,7 @@ class _DistributedReduceOptimizer(torch.optim.Optimizer):
     def __init__(
         self, params, model, communication_type, num_steps_per_communication=1
     ):
+        print(self.__bases__)
         super(self.__class__, self).__init__(params)
 
         named_parameters, models = _check_named_parameters(self, model)
