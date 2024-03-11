@@ -22,7 +22,8 @@ _warning_message_num_step_per_communication = (
 )
 _warning_message_backward_pass_per_step = (
     "Unexpected behavior:\n"
-    "  After num_steps_per_communication times of backward computation `loss.backward()` are called,\n"
+    "  After num_steps_per_communication times of backward"
+    " computation `loss.backward()` are called,\n"
     "  an optimizer step() function must be called.\n"
     "  It does not matter how many step() functions are called in between.\n"
     "  Please adjust num_steps_per_communication to accumulate gradients locally.\n"
@@ -58,11 +59,11 @@ def _check_named_parameters(optimizer, model):
             "model.named_parameters()."
         )
 
-    dups = list(set([k for k, _ in named_parameters]))
+    dups = list({k for k, _ in named_parameters})
     if dups:
         raise ValueError(
             "Parameter names in named_parameters must be unique. "
-            "Found duplicates: %s" % ", ".join(dups)
+            f"Found duplicates: {', '.join(dups)}"
         )
 
     all_param_ids = {
@@ -74,7 +75,7 @@ def _check_named_parameters(optimizer, model):
         raise ValueError(
             "Named parameters provided by model are mismatch with the parameters"
             "handled by optimizer. Python object ids: "
-            "%s" % ", ".join(str(id) for id in unnamed_param_ids)
+            f"{', '.join(str(id) for id in unnamed_param_ids)}"
         )
     return named_parameters, _models
 
@@ -83,7 +84,6 @@ class _DistributedReduceOptimizer(torch.optim.Optimizer):
     def __init__(
         self, params, model, communication_type, num_steps_per_communication=1
     ):
-        print(self.__bases__)
         super(self.__class__, self).__init__(params)
 
         named_parameters, models = _check_named_parameters(self, model)

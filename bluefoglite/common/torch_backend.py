@@ -74,6 +74,7 @@ class BlueFogLiteGroup:
         self._size: Optional[int] = None
         self._topology_and_weights: Optional[TopologyAndWeights] = None
         self._process_group: Optional[dist.ProcessGroup] = None
+        self._backend: Optional[str] = None
 
     @property
     def process_group(self):
@@ -216,15 +217,14 @@ class BlueFogLiteGroup:
 
         op_list = []
         for dst, weight in dst_weights.items():
-            comm_tensor = (
-                tensor.mul(weight).to("cpu")
-                if self._backend == "gloo" and tensor.device.type != "cpu"
-                else tensor.mul(weight)
-            )
             op_list.append(
                 dist.P2POp(
                     dist.isend,
-                    comm_tensor,
+                    (
+                        tensor.mul(weight).to("cpu")
+                        if self._backend == "gloo" and tensor.device.type != "cpu"
+                        else tensor.mul(weight)
+                    ),
                     peer=dst,
                     group=self.process_group,
                 )

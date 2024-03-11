@@ -1,6 +1,6 @@
+import collections
 import torch
 import bluefoglite.torch_api as bfl
-import collections
 
 
 def broadcast_parameters(params, root_rank):
@@ -22,11 +22,11 @@ def broadcast_parameters(params, root_rank):
         # support both named_parameters() and regular parameters()
         params = [p if isinstance(p, tuple) else (None, p) for p in params]
     else:
-        raise ValueError("invalid params of type: %s" % type(params))
+        raise ValueError(f"invalid params of type: {type(params)}")
 
     # Run asynchronous broadcasts.
     async_works = []
-    for name, p in params:
+    for _, p in params:
         async_work = bfl.broadcast_nonblocking(p, inplace=True, root_rank=root_rank)
         async_works.append(async_work)
 
@@ -43,11 +43,11 @@ def neighbor_allreduce_parameters(params):
         # support both named_parameters() and regular parameters()
         params = [p if isinstance(p, tuple) else (None, p) for p in params]
     else:
-        raise ValueError("invalid params of type: %s" % type(params))
+        raise ValueError(f"invalid params of type: {type(params)}")
 
     # Run asynchronous broadcasts.
     async_works = []
-    for name, p in params:
+    for _, p in params:
         if torch.is_floating_point(p):
             async_work = bfl.neighbor_allreduce_nonblocking(p, inplace=True)
             async_works.append(async_work)
@@ -95,8 +95,7 @@ def broadcast_optimizer_state(optimizer, root_rank, device):
     def _get_types(x):
         if isinstance(x, collections.Iterable):
             return type(x), [_get_types(xi) for xi in x]
-        else:
-            return type(x)
+        return type(x)
 
     # Casts an object encoded in a tensor back into its original type and subtypes
     def _recursive_cast(x, dtype):
@@ -104,8 +103,7 @@ def broadcast_optimizer_state(optimizer, root_rank, device):
             t, dtypes = dtype
             x = t(x)
             return t([_recursive_cast(x[i], dtypes[i]) for i in range(len(x))])
-        else:
-            return dtype(x)
+        return dtype(x)
 
     # Some optimizer parameters may be represented as scalars instead of
     # tensors.  In such cases, we need to wrap the scalar in a tensor, then
@@ -142,7 +140,7 @@ def broadcast_optimizer_state(optimizer, root_rank, device):
             if option_key == "params":
                 continue
             # Options like the learning rate are scalar, and need to be wrapped in tensors
-            key = "%s.%d" % (option_key, index)
+            key = f"{option_key}.{index}"
             dtypes = _get_types(option_value)
             option_tensor = torch.tensor([option_value], device=device)
             callbacks[key] = _create_option_callback(
@@ -161,7 +159,7 @@ def broadcast_optimizer_state(optimizer, root_rank, device):
                 if p is None:
                     continue
                 occurrences[name] += 1
-                key = "%s.%d" % (str(name), occurrences[name])
+                key = f"{str(name)}.{occurrences[name]}"
 
                 if not torch.is_tensor(p):
                     # Wrap the scalar in a FloatTensor, and remember its type
