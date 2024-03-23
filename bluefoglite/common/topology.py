@@ -205,7 +205,7 @@ def GetDynamicOnePeerSendRecvRanks(
     for rank in range(size):
         sorted_ranks = sorted(
             topo.successors(rank),
-            key=lambda r, rk=rank: r - rk if r >= rk else r - rk + size,
+            key=lambda r: r - rank if r >= rank else r - rank + size,
         )
         if sorted_ranks[0] == rank:
             sorted_ranks = sorted_ranks[1:]  # remove the self-loop

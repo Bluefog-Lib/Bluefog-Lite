@@ -135,7 +135,7 @@ def broadcast_optimizer_state(optimizer, root_rank, device):
         # Broadcast options like learning rate
         for option_key, option_value in group.items():
             # TODO: what if option_value is None?
-            if option_value is None:
+            if option_value is None or isinstance(option_value, bool):
                 continue
             if option_key == "params":
                 continue
@@ -155,8 +155,8 @@ def broadcast_optimizer_state(optimizer, root_rank, device):
                 # Some parameter names may appear more than once, in which
                 # case we ensure they have a unique identifier defined by
                 # their order
-                # TODO: what if option_value is None?
-                if p is None:
+                # TODO: what if option_value is None or bool?
+                if p is None or isinstance(p, bool):
                     continue
                 occurrences[name] += 1
                 key = f"{str(name)}.{occurrences[name]}"

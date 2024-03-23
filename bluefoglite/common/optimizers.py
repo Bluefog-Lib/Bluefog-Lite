@@ -1,4 +1,5 @@
 from enum import Enum
+from collections import Counter
 import itertools
 import warnings
 
@@ -59,7 +60,10 @@ def _check_named_parameters(optimizer, model):
             "model.named_parameters()."
         )
 
-    dups = list({k for k, _ in named_parameters})
+    name_list = [k for k, _ in named_parameters]
+    name_list_remove_dups = list({k for k, _ in named_parameters})
+    diff_counter = Counter(name_list) - Counter(name_list_remove_dups)
+    dups = list(diff_counter.elements())
     if dups:
         raise ValueError(
             "Parameter names in named_parameters must be unique. "

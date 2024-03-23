@@ -3,7 +3,7 @@
 isort:skip_file
 Generate the derived python file by running the command
   protoc -I=bluefoglite/common/tcp/ --python_out=bluefoglite/common/tcp/ \\
-  bluefoglite/common/tcp/message.proto
+    --mypy_out=bluefoglite/common/tcp/ bluefoglite/common/tcp/message.proto
 """
 import builtins
 import collections.abc

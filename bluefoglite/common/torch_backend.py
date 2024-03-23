@@ -57,7 +57,7 @@ class AsyncWork:
         self._work = work
         self._post_func = post_func
 
-    def wait(self) -> Optional[Any]:
+    def wait(self) -> Optional[torch.Tensor]:
         if isinstance(self._work, Iterable):
             for w in self._work:
                 w.wait()
@@ -286,7 +286,7 @@ class BlueFogLiteGroup:
         src_weights: Optional[Dict[int, float]],
         dst_weights: Optional[Dict[int, float]],
         inplace: bool = False,
-    ) -> torch.Tensor:
+    ) -> Optional[torch.Tensor]:
         return self.neighbor_allreduce_nonblocking(
             tensor=tensor,
             self_weight=self_weight,
@@ -316,7 +316,7 @@ class BlueFogLiteGroup:
 
     def broadcast(
         self, tensor: torch.Tensor, root_rank: int, inplace: bool = True
-    ) -> torch.Tensor:
+    ) -> Optional[torch.Tensor]:
         return self.broadcast_nonblocking(
             tensor=tensor, root_rank=root_rank, inplace=inplace
         ).wait()
@@ -344,5 +344,5 @@ class BlueFogLiteGroup:
         tensor: torch.Tensor,
         op: ReduceOp = ReduceOp.AVG,
         inplace: bool = True,
-    ) -> torch.Tensor:
+    ) -> Optional[torch.Tensor]:
         return self.allreduce_nonblocking(tensor=tensor, op=op, inplace=inplace).wait()
